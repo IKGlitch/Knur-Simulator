@@ -1,5 +1,5 @@
 /* Knur Simulator service worker. CACHE must change with every release. */
-const CACHE = 'knur-v100';
+const CACHE = 'knur-v110';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-180.png', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', (e) => {
