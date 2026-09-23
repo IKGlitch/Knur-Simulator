@@ -100,6 +100,20 @@ body.no-tabs #tabs { display: none; }
 .stat-v { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; } .stat-l { font-size: 12px; color: var(--dim); }
 .field { width: 100%; height: 50px; padding: 0 14px; border-radius: var(--r-md); border: 0; background: var(--surface2); outline: none; }
 .field:focus { box-shadow: 0 0 0 2px var(--accent); }
+input.field[type=date], input.field[type=time] { -webkit-appearance: none; appearance: none; display: flex; align-items: center; font-size: 17px; color: var(--text); min-width: 0; }
+input.field[type=date]::-webkit-date-and-time-value, input.field[type=time]::-webkit-date-and-time-value { text-align: left; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.banner { border-radius: var(--r-lg); padding: 14px 16px; border: 1px solid var(--border); background: var(--surface); }
+.banner.warn { border-color: var(--danger); background: var(--danger-dim); }
+.banner.info { border-color: var(--accent); }
+.date-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 12px; margin: 0 0 10px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border); }
+.date-row svg { width: 18px; height: 18px; color: var(--accent); flex: 0 0 auto; }
+.date-row.past { border-color: var(--accent); }
+.last-time { font-size: 13px; color: var(--dim); padding: 0 2px 6px; }
+.last-time b { color: var(--text); font-weight: 600; }
+.draft-bar { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+.draft-bar .btn { flex: 1; }
+
 textarea.field { height: auto; min-height: 44px; padding: 10px 12px; resize: none; font-size: 16px; line-height: 1.35; }
 .title-input { width: 100%; background: transparent; border: 0; outline: none; font-size: 28px; font-weight: 800; letter-spacing: -.02em; padding: 4px 0; }
 .list-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
@@ -240,7 +254,7 @@ window.KS_SITE = true;
    for the test runner).
    ========================================================================== */
 const ROOT = typeof window !== 'undefined' ? window : globalThis;
-const APP = { name: 'Knur Simulator', short: 'Knur', version: '1.1.0', built: '2026-09-23' };
+const APP = { name: 'Knur Simulator', short: 'Knur', version: '1.3.0', built: '2026-09-23' };
 const KS = (ROOT.KS = ROOT.KNUR = ROOT.KS || { APP });
 KS.APP = APP;
 
@@ -257,11 +271,29 @@ function newId() {
 }
 
 // ---------- parsing (phone keypads: Polish iPhones type a comma) ----------
-/** "82,5" | "82.5" | " 100 " → number; "" / junk → null. */
+const VULGAR = { '½': 0.5, '¼': 0.25, '¾': 0.75, '⅓': 1 / 3, '⅔': 2 / 3, '⅛': 0.125 };
+/**
+ * "82,5" | "82.5" | " 100 " | "8 1/2" | "8½" | "1/2" → number; "" / junk → null.
+ * Fractions are for half reps and small plates.
+ */
 function parseNumber(input) {
   if (input == null) return null;
-  const s = String(input).trim().replace(/\s+/g, '').replace(',', '.');
+  let s = String(input).trim().replace(',', '.');
   if (s === '') return null;
+  // Unicode fractions: "8½" → 8.5, "½" → 0.5
+  const vm = /^(-?\d*)\s*([½¼¾⅓⅔⅛])$/.exec(s);
+  if (vm) {
+    const whole = vm[1] === '' || vm[1] === '-' ? 0 : Math.abs(Number(vm[1]));
+    return (vm[1].startsWith('-') ? -1 : 1) * (whole + VULGAR[vm[2]]);
+  }
+  // "8 1/2", "8-1/2", "1/2"
+  const fm = /^(?:(\d+)[\s-]+)?(\d+)\/(\d+)$/.exec(s);
+  if (fm) {
+    const den = Number(fm[3]);
+    if (!den) return null;
+    return (fm[1] ? Number(fm[1]) : 0) + Number(fm[2]) / den;
+  }
+  s = s.replace(/\s+/g, '');
   if (!/^-?\d*\.?\d+$|^-?\d+\.$/.test(s)) return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
@@ -272,6 +304,12 @@ function parseCount(input) {
   const n = parseNumber(input);
   if (n == null || n < 0) return null;
   return Math.round(n);
+}
+/** Non-negative reps, fractions allowed (half reps): "8,5" | "8 1/2" | "8½" → 8.5. Kept to 2 decimals. */
+function parseReps(input) {
+  const n = parseNumber(input);
+  if (n == null || n < 0 || n > 1000) return null;
+  return Math.round(n * 100) / 100;
 }
 
 /** "1:30" → 90, "1:02:03" → 3723; a plain number is read in `plainUnit` ('sec' | 'min'). */
@@ -369,6 +407,29 @@ function startOfWeek(ts = Date.now()) {
   d.setDate(d.getDate() - day);
   return d.getTime();
 }
+/** Local date/time <-> <input type=date/time> strings. */
+function toDateInput(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+function toTimeInput(ts) {
+  const d = new Date(ts);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+/** "2026-09-15" + "18:30" → local epoch ms, or null if invalid. */
+function fromDateTimeInputs(date, time) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || '');
+  if (!m) return null;
+  const t = /^(\d{1,2}):(\d{2})/.exec(time || '12:00') || [0, 12, 0];
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(t[1]), Number(t[2]), 0, 0);
+  return Number.isNaN(d.getTime()) ? null : d.getTime();
+}
+/** "Today", "Yesterday" or "Tue 15 Sep". */
+function fmtDay(ts, now = Date.now()) {
+  const day = (x) => { const d = new Date(x); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const diff = Math.round((day(now) - day(ts)) / 86400000);
+  return diff === 0 ? 'Today' : diff === 1 ? 'Yesterday' : fmtDate(ts, now);
+}
 /** plural(3, 'set') → "3 sets"; consonant + y → ies; pass `many` for irregulars. */
 function plural(n, one, many) {
   if (n === 1) return `${n} ${one}`;
@@ -387,9 +448,9 @@ function esc(v) {
 }
 
 Object.assign(KS, {
-  newId, parseNumber, parseCount, parseDuration, toDisplayWeight, fromDisplayWeight, fmtWeight, fmtKm,
+  newId, parseNumber, parseCount, parseReps, parseDuration, toDisplayWeight, fromDisplayWeight, fmtWeight, fmtKm,
   fmtClock, fmtDurShort, fmtPace, fmtInt, fmtDate, fmtShortDate, fmtMonth, fmtTime, defaultWorkoutName,
-  startOfWeek, plural, esc, KG_PER_LB,
+  startOfWeek, plural, esc, KG_PER_LB, toDateInput, toTimeInput, fromDateTimeInputs, fmtDay,
 });
 
 /* ---- 02b_calc.js ---- */
@@ -571,9 +632,9 @@ const F_WEIGHT = {
 };
 const F_ADDED = { ...F_WEIGHT, label: (u) => '+' + u };
 const F_REPS = {
-  key: 'reps', mode: 'numeric', label: () => 'reps',
+  key: 'reps', mode: 'decimal', label: () => 'reps', // decimal pad: half reps (8,5)
   format: (v) => (v == null ? '' : String(v)),
-  parse: (t) => (!t.trim() ? null : parseCount(t) ?? undefined),
+  parse: (t) => (!t.trim() ? null : parseReps(t) ?? undefined),
 };
 const F_SECONDS = {
   key: 'durationS', mode: 'text', label: () => 'time',
@@ -731,6 +792,8 @@ function normalizeState(raw) {
   for (const t of S.templates) if (!Array.isArray(t.tags)) t.tags = inferTags(S, t.items || []);
   for (const w of S.workouts) if (!Array.isArray(w.tags)) w.tags = w.finishedAt ? inferTags(S, w.items || []) : [];
   if (!Array.isArray(S.settings.customTags)) S.settings.customTags = [];
+  // 1.3: an edit copy whose workout no longer exists is dropped.
+  if (S.editing && !(S.editing.w && S.workouts.some((w) => w.id === S.editing.w.id && w.finishedAt))) S.editing = null;
   return S;
 }
 
@@ -755,15 +818,18 @@ function listExercises(S, { includeHidden = false } = {}) {
   for (const w of S.workouts) {
     if (!w.finishedAt) continue;
     for (const it of w.items) {
-      const u = usage.get(it.exerciseId) || { last: 0, count: 0 };
+      const u = usage.get(it.exerciseId) || { last: 0, count: 0, lastSets: [] };
       u.count++;
-      u.last = Math.max(u.last, w.startedAt);
+      if (w.startedAt >= u.last) {
+        u.last = w.startedAt;
+        u.lastSets = it.sets.filter((s) => s.done).map(pickValues);
+      }
       usage.set(it.exerciseId, u);
     }
   }
   return S.exercises
     .filter((e) => includeHidden || !e.hidden)
-    .map((e) => ({ ...e, lastUsed: usage.get(e.id)?.last || null, timesUsed: usage.get(e.id)?.count || 0 }))
+    .map((e) => ({ ...e, lastUsed: usage.get(e.id)?.last || null, timesUsed: usage.get(e.id)?.count || 0, lastSets: usage.get(e.id)?.lastSets || [] }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 function guessExercise(name) {
@@ -790,8 +856,12 @@ function createExercise(S, ex) {
 }
 
 // ---------- history queries ----------
-/** Done sets of the latest finished session (started before `beforeTs`) containing the exercise. */
-function previousSets(S, exerciseId, excludeWorkoutId = null, beforeTs = Infinity) {
+/**
+ * The latest finished session (started before `beforeTs`) containing the exercise:
+ * {workoutId, startedAt, name, sets} or null. With the default beforeTs this is
+ * the session closest to today.
+ */
+function previousSession(S, exerciseId, excludeWorkoutId = null, beforeTs = Infinity) {
   let best = null;
   for (const w of S.workouts) {
     if (!w.finishedAt || w.id === excludeWorkoutId || w.startedAt >= beforeTs) continue;
@@ -799,7 +869,12 @@ function previousSets(S, exerciseId, excludeWorkoutId = null, beforeTs = Infinit
     const item = w.items.find((it) => it.exerciseId === exerciseId && it.sets.some((s) => s.done));
     if (item) best = { w, item };
   }
-  return best ? best.item.sets.filter((s) => s.done).map(pickValues) : [];
+  return best ? { workoutId: best.w.id, startedAt: best.w.startedAt, name: best.w.name, sets: best.item.sets.filter((s) => s.done).map(pickValues) } : null;
+}
+/** Done sets of that session (empty when there's none). */
+function previousSets(S, exerciseId, excludeWorkoutId = null, beforeTs = Infinity) {
+  const p = previousSession(S, exerciseId, excludeWorkoutId, beforeTs);
+  return p ? p.sets : [];
 }
 function pickValues(s) {
   return { kind: s.kind, weightKg: s.weightKg, reps: s.reps, durationS: s.durationS, distanceM: s.distanceM, calories: s.calories };
@@ -857,9 +932,9 @@ function makeSet(v) {
   };
 }
 /** New workout item for an exercise, sets pre-filled from last session / template target. */
-function makeWorkoutItem(S, exerciseId, superset, target, excludeWorkoutId) {
+function makeWorkoutItem(S, exerciseId, superset, target, excludeWorkoutId, beforeTs = Infinity) {
   const ex = exById(S, exerciseId);
-  const previous = previousSets(S, exerciseId, excludeWorkoutId);
+  const previous = previousSets(S, exerciseId, excludeWorkoutId, beforeTs);
   const count = initialSetCount(ex ? ex.tracking : 'weight_reps', target, previous);
   const sets = [];
   for (let i = 0; i < count; i++) sets.push(makeSet(prefillSet(i, previous, target)));
@@ -887,9 +962,12 @@ function repeatWorkout(S, pastId) {
 }
 function addExercisesToWorkout(S, workoutId, exerciseIds, asSuperset) {
   const w = workoutById(S, workoutId);
-  if (!w) return;
+  if (w) addExercisesTo(S, w, exerciseIds, asSuperset);
+}
+/** Same, on a workout object (used for the edit copy, which isn't in S.workouts). */
+function addExercisesTo(S, w, exerciseIds, asSuperset) {
   const group = asSuperset && exerciseIds.length > 1 ? newId() : null;
-  for (const id of exerciseIds) if (exById(S, id)) w.items.push(makeWorkoutItem(S, id, group, null, w.id));
+  for (const id of exerciseIds) if (exById(S, id)) w.items.push(makeWorkoutItem(S, id, group, null, w.id, w.backdated || w.finishedAt ? w.startedAt : Infinity));
 }
 /** Appends a set copying the last one's values. */
 function addSet(item) {
@@ -925,7 +1003,99 @@ function finishWorkout(S, workoutId) {
   w.items = w.items.filter((it) => it.sets.length);
   normalizeItems(w.items);
   if (!w.tags || !w.tags.length) w.tags = inferTags(S, w.items);
-  w.finishedAt = Date.now();
+  // A past (back-dated) entry ends at its start + the duration you gave it.
+  w.finishedAt = w.backdated ? w.startedAt + (w.plannedDurationS || 3600) * 1000 : Date.now();
+}
+/** Entries starting more than 6 h before now count as past workouts (no live clock or rest timer). */
+const BACKDATE_MS = 6 * 3600000;
+/**
+ * Move a workout to another date/time. In progress: becomes a past entry if the
+ * time is well before now. Finished: keeps (or sets) its duration.
+ */
+function setWorkoutDate(w, startTs, durationS = null, now = Date.now()) {
+  if (startTs == null || Number.isNaN(startTs)) return false;
+  const start = Math.min(startTs, now);
+  if (w.finishedAt) {
+    const dur = durationS ?? Math.max(60, Math.round((w.finishedAt - w.startedAt) / 1000));
+    w.startedAt = start;
+    w.finishedAt = start + dur * 1000;
+  } else {
+    w.startedAt = start;
+    w.backdated = now - start > BACKDATE_MS;
+    if (durationS != null) w.plannedDurationS = durationS;
+    else if (w.backdated && !w.plannedDurationS) w.plannedDurationS = 3600;
+  }
+  return true;
+}
+/** Start a workout for a past date (optionally from a template). */
+function startPastWorkout(S, { templateId = null, startTs, durationS = 3600 }) {
+  const id = startWorkout(S, { templateId });
+  const w = workoutById(S, id);
+  // Pre-fill from sessions before that date, not from later ones.
+  setWorkoutDate(w, startTs, durationS);
+  w.backdated = true;
+  for (const it of w.items) {
+    const prev = previousSets(S, it.exerciseId, w.id, w.startedAt);
+    const t = templateId ? templateById(S, templateId)?.items.find((x) => x.exerciseId === it.exerciseId) : null;
+    it.sets = it.sets.map((s, i) => ({ ...s, ...prefillSet(i, prev, t) }));
+  }
+  if (!templateId) w.name = defaultWorkoutName(w.startedAt);
+  return id;
+}
+/** Put an in-progress workout saved as a draft back (with any custom exercises it needs). */
+function restoreDraft(S, draft) {
+  if (!draft || !draft.workout || activeWorkout(S) || workoutById(S, draft.workout.id)) return null;
+  for (const e of draft.exercises || []) if (!exById(S, e.id)) S.exercises.push(e);
+  const w = JSON.parse(JSON.stringify(draft.workout));
+  w.finishedAt = null;
+  S.workouts.push(w);
+  return w.id;
+}
+// ---------- editing a finished workout ----------
+// Edits go to a copy in S.editing = {w, since}; the saved workout is untouched
+// until saveEdit(). The copy is part of S, so unsaved edits survive a reload.
+function startEdit(S, workoutId) {
+  const orig = workoutById(S, workoutId);
+  if (!orig || !orig.finishedAt) return null;
+  if (S.editing && S.editing.w.id === workoutId) return S.editing.w;
+  S.editing = { since: Date.now(), w: JSON.parse(JSON.stringify(orig)) };
+  return S.editing.w;
+}
+const editingWorkout = (S) => (S.editing && S.editing.w) || null;
+function editChanged(S) {
+  const e = editingWorkout(S);
+  const orig = e && workoutById(S, e.id);
+  return !!e && (!orig || JSON.stringify(orig) !== JSON.stringify(e));
+}
+/** Unticked sets in the edit copy (these are dropped on save, like Finish). */
+function editUndone(S) {
+  const e = editingWorkout(S);
+  return e ? e.items.reduce((a, it) => a + it.sets.filter((x) => !x.done).length, 0) : 0;
+}
+/**
+ * Apply the edit copy. Returns {ok, id, empty}. `empty` = no sets left (nothing
+ * saved; the caller should offer to delete the workout instead).
+ */
+function saveEdit(S) {
+  const e = editingWorkout(S);
+  if (!e) return { ok: false };
+  const idx = S.workouts.findIndex((w) => w.id === e.id);
+  if (idx < 0) { S.editing = null; return { ok: false }; }
+  const w = JSON.parse(JSON.stringify(e));
+  for (const it of w.items) it.sets = it.sets.filter((x) => x.done);
+  w.items = w.items.filter((it) => it.sets.length);
+  if (!w.items.length) return { ok: false, empty: true, id: w.id };
+  normalizeItems(w.items);
+  if (!w.finishedAt || w.finishedAt < w.startedAt) w.finishedAt = w.startedAt + 3600000;
+  w.editedAt = Date.now();
+  delete w.backdated;
+  delete w.plannedDurationS;
+  S.workouts[idx] = w;
+  S.editing = null;
+  return { ok: true, id: w.id };
+}
+function cancelEdit(S) {
+  S.editing = null;
 }
 function deleteWorkout(S, workoutId) {
   S.workouts = S.workouts.filter((w) => w.id !== workoutId);
@@ -1054,7 +1224,7 @@ function stateCounts(S) {
 Object.assign(KS, {
   SCHEMA, MUSCLES, EQUIPMENT, TRACKING_TYPES, slugId, emptyState, normalizeState, seedExercises, exById, workoutById,
   templateById, activeWorkout, finishedWorkouts, findSet, listExercises, guessExercise, createExercise, previousSets,
-  exerciseHistory, workoutRecords, workoutStats, countWorkoutsSince, startWorkout, repeatWorkout, addExercisesToWorkout,
+  previousSession, setWorkoutDate, startEdit, editingWorkout, editChanged, editUndone, saveEdit, cancelEdit, addExercisesTo, startPastWorkout, restoreDraft, exerciseHistory, workoutRecords, workoutStats, countWorkoutsSince, startWorkout, repeatWorkout, addExercisesToWorkout,
   addSet, completeSet, finishWorkout, deleteWorkout, moveItem, removeItem, toggleSupersetItem, normalizeItems,
   createTemplate, addExercisesToTemplate, duplicateTemplate, deleteTemplate, listTemplates, saveWorkoutAsTemplate,
   makeBackup, stateFromBackup, backupFileName, stateCounts,
@@ -1067,10 +1237,24 @@ Object.assign(KS, {
 
    NEVER RENAME: DB_NAME 'knur', LS_KEY 'knur.v1'. Changing either orphans
    every workout already saved on the phone.
+
+   Data-safety rules (1.2):
+   - A failed read is NOT "no data". If storage can't be read, the app goes
+     read-only and never writes, so it can't overwrite good data with nothing.
+   - IndexedDB calls retry once on a fresh connection (iOS drops connections
+     when the app is backgrounded or updated).
+   - Shrink guard: a save that would drop finished workouts (or everything)
+     below what's stored is refused unless the user just deleted/erased/restored.
+   - Automatic snapshots: one per day (kept 7) and one before every app update
+     (kept 3), plus the single restore point taken before restore/erase.
+   - The in-progress workout is also kept as a separate small "draft" record.
    ========================================================================== */
 const DB_NAME = 'knur'; // do not rename
 const LS_KEY = 'knur.v1'; // do not rename
+const LS_DRAFT = 'knur.draft';
 const IDB_STORE = 'kv';
+const DAILY_KEEP = 7;
+const UPDATE_KEEP = 3;
 
 /** The one live state object (set at boot). */
 var S = null; // eslint-disable-line no-var
@@ -1078,10 +1262,19 @@ var S = null; // eslint-disable-line no-var
 const Store = {
   _db: null,
   _timer: null,
-  _pending: null,
   lastError: null,
+  readOnly: false, // true when stored data couldn't be read: never write
+  allowShrink: false, // set by deliberate deletes / erase / restore
+  storedWorkouts: 0, // finished workouts in the last good read or write
+  lastSavedAt: 0,
+  lastDraftAt: 0,
+  keepDraft: false, // an orphan draft is waiting for Restore / Discard: don't clear it
 
-  open() {
+  open(force = false) {
+    if (force && this._db) {
+      try { this._db.close(); } catch (e) { /* ignore */ }
+      this._db = null;
+    }
     if (this._db) return Promise.resolve(this._db);
     if (typeof indexedDB === 'undefined') return Promise.resolve(null);
     return new Promise((resolve) => {
@@ -1092,58 +1285,76 @@ const Store = {
         resolve(null);
         return;
       }
+      const timer = setTimeout(() => resolve(null), 4000); // iOS can hang here
       req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
       req.onsuccess = () => {
+        clearTimeout(timer);
         this._db = req.result;
+        this._db.onclose = () => (this._db = null);
+        this._db.onversionchange = () => { try { this._db.close(); } catch (e) { /* ignore */ } this._db = null; };
         resolve(this._db);
       };
-      req.onerror = () => resolve(null);
-      req.onblocked = () => resolve(null);
+      req.onerror = () => { clearTimeout(timer); resolve(null); };
+      req.onblocked = () => { clearTimeout(timer); resolve(null); };
     });
   },
-  async idbGet(key) {
-    const db = await this.open();
-    if (!db) return undefined;
-    return new Promise((resolve) => {
-      try {
-        const r = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
-        r.onsuccess = () => resolve(r.result);
-        r.onerror = () => resolve(undefined);
-      } catch (e) {
-        resolve(undefined);
-      }
-    });
+  /** One IndexedDB request, retried once on a fresh connection. Resolves {ok, value}. */
+  async _req(mode, fn) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const db = await this.open(attempt > 0);
+      if (!db) continue;
+      const res = await new Promise((resolve) => {
+        try {
+          const tx = db.transaction(IDB_STORE, mode);
+          const r = fn(tx.objectStore(IDB_STORE));
+          let value;
+          if (r) r.onsuccess = () => (value = r.result);
+          tx.oncomplete = () => resolve({ ok: true, value });
+          tx.onerror = () => resolve({ ok: false });
+          tx.onabort = () => resolve({ ok: false });
+        } catch (e) {
+          resolve({ ok: false });
+        }
+      });
+      if (res.ok) return res;
+    }
+    return { ok: false };
   },
-  async idbSet(key, value) {
-    const db = await this.open();
-    if (!db) return false;
-    return new Promise((resolve) => {
-      try {
-        const tx = db.transaction(IDB_STORE, 'readwrite');
-        tx.objectStore(IDB_STORE).put(value, key);
-        tx.oncomplete = () => resolve(true);
-        tx.onerror = () => resolve(false);
-        tx.onabort = () => resolve(false);
-      } catch (e) {
-        resolve(false);
-      }
-    });
-  },
+  idbGet(key) { return this._req('readonly', (st) => st.get(key)); },
+  async idbSet(key, value) { return (await this._req('readwrite', (st) => st.put(value, key))).ok; },
+  async idbDel(key) { return (await this._req('readwrite', (st) => st.delete(key))).ok; },
+  async idbKeys() { const r = await this._req('readonly', (st) => st.getAllKeys()); return r.ok ? r.value || [] : []; },
 
-  /** Newest of the IndexedDB copy and the localStorage mirror, normalised. */
+  /**
+   * Newest of the IndexedDB copy and the localStorage mirror, normalised.
+   * Returns {state, fresh, failed}. `failed` = couldn't read and can't be sure there's no data.
+   */
   async load() {
     let fromIdb = null;
     let fromLs = null;
-    try {
-      const raw = await this.idbGet('state');
-      if (raw) fromIdb = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    } catch (e) { /* ignore */ }
+    let idbOk = false;
+    for (let attempt = 0; attempt < 3 && !idbOk; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 400 * attempt));
+      const res = await this.idbGet('state');
+      if (res.ok) {
+        idbOk = true;
+        try { fromIdb = res.value ? (typeof res.value === 'string' ? JSON.parse(res.value) : res.value) : null; } catch (e) { fromIdb = null; idbOk = false; }
+      }
+    }
+    let lsOk = true;
     try {
       const raw = localStorage.getItem(LS_KEY);
       if (raw) fromLs = JSON.parse(raw);
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      lsOk = false;
+    }
     const pick = !fromIdb ? fromLs : !fromLs ? fromIdb : (fromLs.savedAt || 0) > (fromIdb.savedAt || 0) ? fromLs : fromIdb;
-    return { state: normalizeState(pick), fresh: !pick };
+    // Nothing read AND IndexedDB unreadable: we can't tell "new install" from "read failed".
+    const failed = !pick && (!idbOk || !lsOk) && typeof indexedDB !== 'undefined';
+    this.readOnly = failed;
+    const state = normalizeState(pick);
+    this.storedWorkouts = state.workouts.filter((w) => w.finishedAt).length;
+    return { state, fresh: !pick && !failed, failed };
   },
 
   /** Debounced save of the global state. */
@@ -1154,9 +1365,22 @@ const Store = {
   async flush() {
     clearTimeout(this._timer);
     if (!S) return false;
+    if (this.readOnly) {
+      this.lastError = 'Saved data could not be read, so saving is paused to protect it. Close and reopen the app.';
+      return false;
+    }
+    const finished = S.workouts.filter((w) => w.finishedAt).length;
+    if (finished < this.storedWorkouts && !this.allowShrink) {
+      // Something tried to save fewer workouts than are stored, without the user deleting any.
+      this.lastError = 'Blocked a save that would have removed workouts.';
+      console.warn(this.lastError, finished, '<', this.storedWorkouts);
+      return false;
+    }
+    this.allowShrink = false;
     S.savedAt = Date.now();
     const json = JSON.stringify(S);
-    const ok = await this.idbSet('state', json);
+    // localStorage first: it's synchronous, so it completes even when the page is
+    // closing (pagehide / reload), where an IndexedDB write may be cut off.
     let lsOk = false;
     try {
       localStorage.setItem(LS_KEY, json);
@@ -1165,18 +1389,105 @@ const Store = {
       // Quota: large histories may not fit in localStorage. IndexedDB still has it.
       try { localStorage.removeItem(LS_KEY); } catch (e2) { /* ignore */ }
     }
-    this.lastError = ok || lsOk ? null : 'Could not save to this device.';
-    return ok || lsOk;
+    const ok = await this.idbSet('state', json);
+    const saved = ok || lsOk;
+    this.lastError = saved ? null : 'Could not save to this device.';
+    if (saved) {
+      this.storedWorkouts = finished;
+      this.lastSavedAt = S.savedAt;
+    }
+    await this.saveDraft();
+    return saved;
+  },
+  /** Called before a deliberate removal (delete workout, erase, restore, undo). */
+  permitShrink() {
+    this.allowShrink = true;
   },
 
+  // ---------- draft of the in-progress workout ----------
+  /** Small separate copy of the active workout (+ custom exercises it uses). */
+  async saveDraft({ manual = false } = {}) {
+    if (!S || this.readOnly) return false;
+    const w = activeWorkout(S);
+    if (!w) {
+      if (!this.keepDraft) await this.clearDraft();
+      return true;
+    }
+    const exIds = new Set(w.items.map((i) => i.exerciseId));
+    const draft = { at: Date.now(), manual, workout: w, exercises: S.exercises.filter((e) => e.custom && exIds.has(e.id)) };
+    const json = JSON.stringify(draft);
+    let ok = false;
+    try { localStorage.setItem(LS_DRAFT, json); ok = true; } catch (e) { /* ignore */ }
+    ok = (await this.idbSet('draft', json)) || ok;
+    if (ok) this.lastDraftAt = draft.at;
+    return ok;
+  },
+  async loadDraft() {
+    let a = null;
+    let b = null;
+    try { const raw = localStorage.getItem(LS_DRAFT); if (raw) a = JSON.parse(raw); } catch (e) { /* ignore */ }
+    const r = await this.idbGet('draft');
+    try { if (r.ok && r.value) b = JSON.parse(r.value); } catch (e) { /* ignore */ }
+    const d = !a ? b : !b ? a : (a.at || 0) >= (b.at || 0) ? a : b;
+    return d && d.workout ? d : null;
+  },
+  async clearDraft() {
+    this.keepDraft = false;
+    try { localStorage.removeItem(LS_DRAFT); } catch (e) { /* ignore */ }
+    await this.idbDel('draft');
+    this.lastDraftAt = 0;
+  },
+
+  // ---------- restore point + automatic snapshots ----------
   /** One restore point, overwritten each time (taken before restore / erase). */
   async snapshot(reason) {
     const point = { at: Date.now(), reason, counts: stateCounts(S), state: JSON.stringify(S) };
     return this.idbSet('restorepoint', point);
   },
   async restorePoint() {
-    const p = await this.idbGet('restorepoint');
-    return p && p.state ? p : null;
+    const r = await this.idbGet('restorepoint');
+    return r.ok && r.value && r.value.state ? r.value : null;
+  },
+  /** kind: 'daily' | 'update'. Stored under snap:<kind>:<id>. */
+  async snapshotAuto(kind, reason, id = String(Date.now())) {
+    if (!S) return false;
+    const snap = { at: Date.now(), kind, reason, version: APP.version, counts: stateCounts(S), state: JSON.stringify(S) };
+    const ok = await this.idbSet(`snap:${kind}:${id}`, snap);
+    await this.pruneSnapshots();
+    return ok;
+  },
+  async pruneSnapshots() {
+    const keys = (await this.idbKeys()).filter((k) => typeof k === 'string' && k.startsWith('snap:'));
+    const byKind = {};
+    for (const k of keys) (byKind[k.split(':')[1]] = byKind[k.split(':')[1]] || []).push(k);
+    const keep = { daily: DAILY_KEEP, update: UPDATE_KEEP };
+    for (const [kind, list] of Object.entries(byKind)) {
+      list.sort().reverse(); // ids sort by date/time
+      for (const k of list.slice(keep[kind] ?? 3)) await this.idbDel(k);
+    }
+  },
+  /** All automatic snapshots, newest first (metadata only). */
+  async listSnapshots() {
+    const keys = (await this.idbKeys()).filter((k) => typeof k === 'string' && k.startsWith('snap:'));
+    const out = [];
+    for (const k of keys) {
+      const r = await this.idbGet(k);
+      if (r.ok && r.value) out.push({ key: k, at: r.value.at, kind: r.value.kind, reason: r.value.reason, version: r.value.version, counts: r.value.counts });
+    }
+    return out.sort((a, b) => b.at - a.at);
+  },
+  async getSnapshot(key) {
+    const r = await this.idbGet(key);
+    return r.ok && r.value && r.value.state ? r.value : null;
+  },
+  /** Once per day, on first open, before anything changes. */
+  async dailySnapshot() {
+    if (!S || this.readOnly || !S.workouts.length) return false;
+    const d = new Date();
+    const id = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    const existing = await this.idbGet(`snap:daily:${id}`);
+    if (existing.ok && existing.value) return false;
+    return this.snapshotAuto('daily', 'Daily snapshot', id);
   },
 
   async persist() {
@@ -1184,6 +1495,12 @@ const Store = {
       if (navigator.storage && navigator.storage.persist) return await navigator.storage.persist();
     } catch (e) { /* ignore */ }
     return false;
+  },
+  async isPersisted() {
+    try {
+      if (navigator.storage && navigator.storage.persisted) return await navigator.storage.persisted();
+    } catch (e) { /* ignore */ }
+    return null;
   },
 };
 KS.Store = Store;
@@ -1428,6 +1745,10 @@ const ICON_PATHS = {
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h0"/>',
   phone: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
   up: '<path d="m6 15 6-6 6 6"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  save: '<path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M8 3v5h8V3M8 21v-7h8v7"/>',
+  shield: '<path d="M12 3 5 6v6c0 4.5 3 7.7 7 9 4-1.3 7-4.5 7-9V6z"/><path d="m9 12 2 2 4-4"/>',
+  back: '<path d="M4 12h16M4 12l6-6M4 12l6 6"/>',
   down: '<path d="m6 9 6 6 6-6"/>',
 };
 function icon(name, cls = '') {
@@ -1649,7 +1970,7 @@ const Wake = {
   lock: null,
   want: false,
   async update() {
-    const want = !!(S && S.settings.keepAwake && ui.route && ui.route.name === 'active' && activeWorkout(S));
+    const want = !!(S && S.settings.keepAwake && ui.route && ui.route.name === 'active' && activeWorkout(S) && !activeWorkout(S).backdated);
     this.want = want;
     if (!('wakeLock' in navigator)) return;
     try {
@@ -1754,6 +2075,7 @@ function tagEditor(kind, target) {
     .join('')}<button class="chip" data-a="newTag" data-kind="${kind}" data-id="${target.id}">+ New tag</button></div>`;
 }
 function tagTarget(d) {
+  if (d.kind === 'edit') return editingWorkout(S);
   return d.kind === 'template' ? templateById(S, d.id) : workoutById(S, d.id);
 }
 A.toggleTag = (d) => {
@@ -1794,14 +2116,26 @@ VIEWS.today = () => {
       <button class="icon-btn" data-a="dismissInstall" aria-label="Dismiss">${icon('x')}</button></div></div>`;
   }
 
+  html += safetyBanners();
+
+  if (!active && ui.pendingDraft) {
+    const dw = ui.pendingDraft.workout;
+    const done = dw.items.reduce((a, it) => a + it.sets.filter((x) => x.done).length, 0);
+    html += `<div class="banner info mt12"><div class="caps">Unsaved workout found</div>
+      <div class="bold ell mt4" style="font-size:17px">${esc(dw.name)}</div>
+      <div class="small dim">${esc(fmtDay(dw.startedAt))} · ${plural(dw.items.length, 'exercise')} · ${plural(done, 'set')} ticked · draft saved ${esc(toTimeInput(ui.pendingDraft.at))}</div>
+      <div class="draft-bar"><button class="btn sm primary" data-a="restoreDraft">Restore it</button><button class="btn sm" data-a="dropDraft">Discard</button></div></div>`;
+  }
+
   if (active) {
     const st = workoutStats(S, active);
     html += `<div class="card accent-border mt12"><div class="row between"><div class="grow"><div class="caps">In progress</div>
       <div class="bold ell" style="font-size:18px">${esc(active.name)}</div><div class="small dim">${plural(st.sets, 'set')} done</div></div>
-      <div class="accent bold tnum" style="font-size:20px" data-elapsed="${active.startedAt}">${fmtClock((Date.now() - active.startedAt) / 1000)}</div></div>
+      ${active.backdated ? `<div class="small accent bold" style="text-align:right">${esc(fmtDay(active.startedAt))}</div>` : `<div class="accent bold tnum" style="font-size:20px" data-elapsed="${active.startedAt}">${fmtClock((Date.now() - active.startedAt) / 1000)}</div>`}</div>
       <button class="btn primary mt12" data-a="go" data-to="active">${icon('play')} Resume workout</button></div>`;
   } else {
-    html += `<button class="btn primary mt12" data-a="startEmpty">${icon('plus')} Start empty workout</button>`;
+    html += `<button class="btn primary mt12" data-a="startEmpty">${icon('plus')} Start empty workout</button>
+      <button class="btn mt8" data-a="logPast">${icon('calendar')} Log a past workout</button>`;
   }
 
   html += `<div class="section"><span class="caps">Quick start</span><button class="link" data-a="go" data-to="templates">All templates</button></div>`;
@@ -1826,6 +2160,12 @@ VIEWS.today = () => {
     html += ls.volumeKg > 0 ? stat(`${u} lifted`, fmtInt(toDisplayWeight(ls.volumeKg, u))) : stat('duration', fmtDurShort(ls.durationS));
   }
   html += `</div></div>`;
+  const finishedN = finishedWorkouts(S).length;
+  if (finishedN >= 3 && Date.now() - (S.settings.lastBackupAt || 0) > 14 * 86400000) {
+    html += `<div class="card mt12"><div class="row"><div class="grow"><div class="bold">Back up your workouts</div>
+      <div class="small dim mt4">${S.settings.lastBackupAt ? `Last backup ${esc(agoText(S.settings.lastBackupAt))}.` : 'No backup yet.'} A backup file is the only copy that survives deleting the app. Save it to Files or iCloud Drive.</div></div></div>
+      <button class="btn sm primary mt12" data-a="exportBackup">${icon('share')} Export backup</button></div>`;
+  }
   html += `<button class="btn mt24" data-a="go" data-to="exercises">${icon('barbell')} Exercise library</button>`;
   return { title: 'Today', large: true, body: html, tab: 'today' };
 };
@@ -1836,7 +2176,13 @@ A.dismissInstall = () => {
 };
 
 /** Start a workout, guarding against two running at once. */
-function startFlow(make) {
+async function startFlow(make) {
+  if (ui.pendingDraft && !activeWorkout(S)) {
+    const ok = await confirmDlg('Unsaved workout found', `Starting a new workout discards the draft of “${ui.pendingDraft.workout.name}”. Restore it from Today instead?`, 'Discard & start', true);
+    if (!ok) return;
+    ui.pendingDraft = null;
+    await Store.clearDraft();
+  }
   const active = activeWorkout(S);
   const begin = () => {
     const id = make();
@@ -1866,6 +2212,97 @@ A.repeatWorkout = (d) => startFlow(() => repeatWorkout(S, d.id));
 setInterval(() => {
   for (const el of $$('[data-elapsed]')) el.textContent = fmtClock((Date.now() - Number(el.dataset.elapsed)) / 1000);
 }, 1000);
+
+// ---------- data-safety banners (shown on Today and Settings) ----------
+function safetyBanners() {
+  if (Store.readOnly) {
+    return `<div class="banner warn mt12"><div class="bold danger">Your saved data couldn't be read</div>
+      <div class="small mt4">Saving is paused so nothing gets overwritten. Close the app completely (swipe it away) and open it again. Your workouts are still on the phone.</div>
+      <button class="btn sm mt12" data-a="reloadApp">Try again</button></div>`;
+  }
+  if (Store.lastError) {
+    return `<div class="banner warn mt12"><div class="bold danger">Not saved</div><div class="small mt4">${esc(Store.lastError)}</div>
+      <button class="btn sm mt12" data-a="reloadApp">Reload</button></div>`;
+  }
+  return '';
+}
+A.reloadApp = () => location.reload();
+
+// ---------- draft recovery ----------
+A.restoreDraft = async () => {
+  const d = ui.pendingDraft;
+  ui.pendingDraft = null;
+  Store.keepDraft = false;
+  if (!d) return rerender();
+  const id = restoreDraft(S, d);
+  if (!id) { toast('Nothing to restore'); return rerender(); }
+  await Store.flush();
+  toast('Workout restored');
+  go('active');
+};
+A.dropDraft = async () => {
+  if (!(await confirmDlg('Discard the unsaved workout?', 'The draft is deleted for good.', 'Discard', true))) return;
+  ui.pendingDraft = null;
+  await Store.clearDraft();
+  rerender();
+};
+
+// ---------- date & time sheet (past workouts, changing a workout's date) ----------
+/**
+ * opts: {title, startTs, durationS, withTemplates, okLabel, onSave(startTs, durationS, templateId)}
+ * durationS null = don't ask for a duration.
+ */
+function dateSheet({ title, startTs, durationS = 3600, withTemplates = false, okLabel = 'Save', onSave }) {
+  const form = { tpl: null };
+  const tpls = withTemplates ? listTemplates(S) : [];
+  const now = Date.now();
+  const body = `<div class="grid2"><label><div class="caps">Date</div>
+      <input class="field mt8" type="date" id="ds-date" value="${toDateInput(startTs)}" max="${toDateInput(now)}"></label>
+      <label><div class="caps">Start time</div><input class="field mt8" type="time" id="ds-time" value="${toTimeInput(startTs)}"></label></div>
+    ${durationS != null ? `<label><div class="caps mt16">Duration (minutes)</div>
+      <input class="field mt8" id="ds-dur" inputmode="numeric" value="${Math.round(durationS / 60)}" autocomplete="off"></label>` : ''}
+    ${withTemplates ? `<div class="caps mt24">Start from</div><div class="chips wrap mt8" id="ds-tpl">
+      <button class="chip on" data-ds="">Empty</button>${tpls.map((t) => `<button class="chip" data-ds="${t.id}">${esc(t.name)}</button>`).join('')}</div>
+      <p class="tiny faint mt8">Sets are pre-filled from the last time before that date. Tick the sets you did, then Finish.</p>` : ''}
+    <div class="small danger mt12" id="ds-err" role="alert"></div>
+    <button class="btn primary mt16" id="ds-ok">${esc(okLabel)}</button>`;
+  const el = openSheet({ title, body });
+  el.addEventListener('click', (ev) => {
+    const chip = ev.target.closest('[data-ds]');
+    if (chip) {
+      form.tpl = chip.dataset.ds || null;
+      for (const c of $$('[data-ds]', el)) c.classList.toggle('on', c === chip);
+      return;
+    }
+    if (!ev.target.closest('#ds-ok')) return;
+    const ts = fromDateTimeInputs($('#ds-date', el).value, $('#ds-time', el).value);
+    const err = $('#ds-err', el);
+    if (ts == null) { err.textContent = 'Pick a date.'; return; }
+    if (ts > Date.now() + 60000) { err.textContent = 'That’s in the future. Pick today or an earlier day.'; return; }
+    let dur = null;
+    if (durationS != null) {
+      const m = parseNumber($('#ds-dur', el).value);
+      if (!m || m <= 0 || m > 600) { err.textContent = 'Duration: minutes between 1 and 600.'; return; }
+      dur = Math.round(m * 60);
+    }
+    Layer.close();
+    onSave(ts, dur, form.tpl);
+  });
+}
+
+A.logPast = () => {
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  y.setHours(18, 0, 0, 0);
+  dateSheet({
+    title: 'Log a past workout',
+    startTs: y.getTime(),
+    durationS: 3600,
+    withTemplates: true,
+    okLabel: 'Start logging',
+    onSave: (ts, dur, tpl) => startFlow(() => startPastWorkout(S, { templateId: tpl, startTs: ts, durationS: dur })),
+  });
+};
 
 /* ---- 05_workout.js ---- */
 /* ==========================================================================
@@ -1991,13 +2428,38 @@ function setRowHtml(w, item, ex, s, n, prev) {
       ${pace ? `<tr><td colspan="${fields.length + 3}" class="pace">pace ${esc(pace)}</td></tr>` : ''}`;
 }
 
+/** The workout the open screen works on: the edit copy on #/edit, else the one in progress. */
+const isEditing = () => !!(ui.route && ui.route.name === 'edit');
+function curW() {
+  return isEditing() ? editingWorkout(S) : activeWorkout(S);
+}
 VIEWS.active = () => {
   const w = activeWorkout(S);
   if (!w) return { redirect: 'today' };
+  return workoutEditor(w, false);
+};
+VIEWS.edit = (r) => {
+  let w = editingWorkout(S);
+  if (!w || w.id !== r.id) {
+    if (w && w.id !== r.id) return { redirect: 'edit/' + w.id }; // finish the other edit first
+    w = startEdit(S, r.id);
+    if (!w) return { redirect: 'history' };
+    Store.save();
+  }
+  return workoutEditor(w, true);
+};
+function workoutEditor(w, editing) {
   const u = unit();
   const info = supersetInfo(w.items.map((i) => i.superset));
   const st = workoutStats(S, w);
-  let html = `<div class="row between small dim" style="padding:0 4px 8px"><span>${st.sets}/${st.sets + st.undone} sets</span>${
+  const past = !!w.backdated || editing;
+  const durS = editing ? Math.round((w.finishedAt - w.startedAt) / 1000) : w.plannedDurationS || 3600;
+  let html = editing ? `<div class="banner info" style="margin-bottom:10px"><div class="bold">Editing a saved workout</div>
+      <div class="small dim mt4">Change anything, then tap <b>Save</b>. Unticked sets are removed when you save. Nothing changes until then.</div></div>` : '';
+  html += `<button class="date-row ${past ? 'past' : ''}" data-a="workoutDate">${icon('calendar')}<div class="grow">
+      <div class="bold">${editing ? esc(fmtDay(w.startedAt)) : past ? `Past workout · ${esc(fmtDay(w.startedAt))}` : `${esc(fmtDay(w.startedAt))} · started ${esc(toTimeInput(w.startedAt))}`}</div>
+      <div class="small dim">${past ? `${esc(toTimeInput(w.startedAt))} · ${esc(fmtDurShort(durS))} · tap to change` : 'Logging an older session? Tap to change the date'}</div></div>${icon('chev', 'faint')}</button>
+    <div class="row between small dim" style="padding:0 4px 8px"><span>${st.sets}/${st.sets + st.undone} sets</span>${
     st.volumeKg > 0 ? `<span class="tnum">${fmtInt(toDisplayWeight(st.volumeKg, u))} ${u}</span>` : ''
   }</div>`;
 
@@ -2008,7 +2470,8 @@ VIEWS.active = () => {
     const ex = exById(S, item.exerciseId) || { name: 'Unknown exercise', tracking: 'weight_reps', category: 'strength' };
     const ss = info[idx];
     const t = w.templateId ? templateById(S, w.templateId)?.items.find((ti) => ti.exerciseId === item.exerciseId) : null;
-    const prev = previousSets(S, item.exerciseId, w.id, w.startedAt);
+    const last = previousSession(S, item.exerciseId, w.id, w.startedAt);
+    const prev = last ? last.sets : [];
     const sub = [t ? formatTarget(ex.tracking, t) : '', ex.tracking !== 'cardio' ? `rest ${fmtClock(item.restS ?? S.settings.defaultRestS)}` : ''].filter(Boolean).join(' · ');
     const fields = fieldsFor(ex.tracking);
     let n = 0;
@@ -2018,33 +2481,39 @@ VIEWS.active = () => {
       <div class="ex-head">${ssBadge(ss)}<button class="grow" style="text-align:left" data-a="exMenu" data-it="${item.id}">
         <div class="ex-name ell ${ex.tracking === 'cardio' ? 'cardio' : ''}">${esc(ex.name)}</div><div class="small dim">${esc(sub)}</div></button>
         <button class="icon-btn" data-a="exMenu" data-it="${item.id}" aria-label="Exercise options">${icon('more')}</button></div>
+      ${lastTimeHtml(ex, last)}
       ${item.notes != null ? `<textarea class="note" rows="1" placeholder="Note (seat height, grip, how it felt…)" data-i="itemNote" data-it="${item.id}">${esc(item.notes)}</textarea>` : ''}
       <table class="sets"><colgroup><col class="c-set"><col class="c-prev">${fields.map(() => '<col>').join('')}<col class="c-chk"></colgroup>
         <thead><tr><th>SET</th><th>PREVIOUS</th>${fields.map((f) => `<th>${esc(f.label(u).toUpperCase())}</th>`).join('')}<th></th></tr></thead>
         <tbody>${rows}</tbody></table>
       <button class="add-set" data-a="addSet" data-it="${item.id}">${icon('plus')} Add set</button></section>`;
   });
-  html += `<button class="btn mt12" data-a="pickFor" data-mode="workout" data-id="${w.id}">${icon('plus')} Add exercises</button>
-    <div class="caps mt24" style="margin-bottom:4px">Tags</div>${tagEditor('workout', w)}
+  html += `<button class="btn mt12" data-a="pickFor" data-mode="${editing ? 'edit' : 'workout'}" data-id="${w.id}">${icon('plus')} Add exercises</button>
+    <div class="caps mt24" style="margin-bottom:4px">Tags</div>${tagEditor(editing ? 'edit' : 'workout', w)}
     <p class="tiny faint" style="margin:0 0 4px">Leave empty and Knur picks Push / Pull / Legs / Cardio from what you trained.</p>
     <div class="caps mt16" style="margin-bottom:6px">Workout notes</div>
     <textarea class="field" rows="2" placeholder="How did it go? Energy, sleep, pain…" data-i="workoutNote">${esc(w.notes || '')}</textarea>
-    <button class="btn ghost mt24" data-a="discardWorkout">Discard workout</button>`;
+    ${editing ? `<button class="btn primary mt24" data-a="editSave">${icon('check')} Save changes</button>
+    <button class="btn ghost mt12" data-a="editCancel">Cancel editing</button>
+    <div class="tiny faint mt8" style="text-align:center">Unsaved edits are kept on the phone until you save or cancel.</div>` : `
+    <div class="draft-bar mt24"><button class="btn" data-a="saveDraft">${icon('save')} Save draft</button><button class="btn" data-a="saveLeave">Save &amp; leave</button></div>
+    <div class="tiny faint mt8" id="draft-status" style="text-align:center">${draftStatus()}</div>
+    <button class="btn ghost mt16" data-a="discardWorkout">Discard workout</button>`}`;
 
   return {
     title: w.name,
-    titleHtml: `<button data-a="renameWorkout" style="max-width:100%"><div class="ell">${esc(w.name)}</div><div class="small dim tnum" style="font-weight:500" data-elapsed="${w.startedAt}">${fmtClock((Date.now() - w.startedAt) / 1000)}</div></button>`,
-    left: backBtn('today'),
-    right: `<button class="finish-btn" data-a="finishWorkout">Finish</button>`,
+    titleHtml: `<button data-a="renameWorkout" style="max-width:100%"><div class="ell">${esc(w.name)}</div>${past ? `<div class="small dim" style="font-weight:500">${esc(fmtShortDate(w.startedAt))}</div>` : `<div class="small dim tnum" style="font-weight:500" data-elapsed="${w.startedAt}">${fmtClock((Date.now() - w.startedAt) / 1000)}</div>`}</button>`,
+    left: editing ? `<button class="link" data-a="editCancel">Cancel</button>` : backBtn('today'),
+    right: editing ? `<button class="finish-btn" data-a="editSave">Save</button>` : `<button class="finish-btn" data-a="finishWorkout">Finish</button>`,
     body: html,
     noTabs: true,
-    tab: 'today',
+    tab: editing ? 'history' : 'today',
   };
-};
+}
 
 // ---------- handlers ----------
 function activeCtx(setId) {
-  const w = activeWorkout(S);
+  const w = curW();
   if (!w) return null;
   const f = findSet(w, setId);
   return f ? { w, ...f, ex: exById(S, f.item.exerciseId) } : null;
@@ -2083,7 +2552,7 @@ A.tick = async (d) => {
   }
   if (navigator.vibrate) navigator.vibrate(15);
   const idx = c.w.items.indexOf(c.item);
-  if (c.ex.tracking !== 'cardio') {
+  if (c.ex.tracking !== 'cardio' && !c.w.backdated && !isEditing()) {
     const label = nextUpLabel(c.w, idx);
     if (!label) Rest.stop();
     else if (shouldRestAfter(c.w.items.map((i) => i.superset), idx)) Rest.start(c.item.restS ?? S.settings.defaultRestS, label);
@@ -2093,7 +2562,7 @@ A.tick = async (d) => {
   commit();
 };
 A.addSet = (d) => {
-  const w = activeWorkout(S);
+  const w = curW();
   const item = w && w.items.find((i) => i.id === d.it);
   if (!item) return;
   addSet(item);
@@ -2112,7 +2581,7 @@ A.setMenu = (d) => {
   ]);
 };
 A.exMenu = (d) => {
-  const w = activeWorkout(S);
+  const w = curW();
   const idx = w ? w.items.findIndex((i) => i.id === d.it) : -1;
   if (idx < 0) return;
   const item = w.items[idx];
@@ -2149,22 +2618,22 @@ function restMenu(onPick) {
   ]);
 }
 I.itemNote = (d, el) => {
-  const w = activeWorkout(S);
+  const w = curW();
   const item = w && w.items.find((i) => i.id === d.it);
   if (item) { item.notes = el.value; Store.save(); }
 };
 I.workoutNote = (d, el) => {
-  const w = activeWorkout(S);
+  const w = curW();
   if (w) { w.notes = el.value || null; Store.save(); }
 };
 A.renameWorkout = async () => {
-  const w = activeWorkout(S);
+  const w = curW();
   if (!w) return;
   const name = await promptDlg('Workout name', w.name);
   if (name && name.trim()) { w.name = name.trim(); commit(); }
 };
 A.finishWorkout = async () => {
-  const w = activeWorkout(S);
+  const w = curW();
   if (!w) return;
   const st = workoutStats(S, w);
   if (st.sets === 0) {
@@ -2172,11 +2641,11 @@ A.finishWorkout = async () => {
     return;
   }
   const msg = st.undone ? `${plural(st.undone, 'unticked set')} will be discarded.` : 'Nice work.';
-  if (!(await confirmDlg('Finish workout?', msg, 'Finish'))) return;
+  if (!(await confirmDlg(w.backdated ? `Save workout for ${fmtDay(w.startedAt)}?` : 'Finish workout?', msg, w.backdated ? 'Save' : 'Finish'))) return;
   finishWorkout(S, w.id);
   Rest.stop();
   if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
-  Store.flush();
+  await Store.flush(); // also clears the draft (no workout in progress now)
   go(`workout/${w.id}/summary`, { replace: true });
 };
 function discardNow(w) {
@@ -2186,8 +2655,110 @@ function discardNow(w) {
   go('today', { replace: true });
 }
 A.discardWorkout = async () => {
-  const w = activeWorkout(S);
+  const w = curW();
   if (w && (await confirmDlg('Discard workout?', 'Everything logged in this workout will be deleted.', 'Discard', true))) discardNow(w);
+};
+
+// ---------- 1.2: last time, date, drafts ----------
+/** "Last time · Mon 14 Sep: 80×8 · 80×8 · 77.5×7" (the session closest to this workout's date). */
+function lastTimeHtml(ex, last) {
+  if (!last) return `<div class="last-time">First time${ex.tracking === 'cardio' ? '' : ': no earlier sets to compare'}</div>`;
+  const u = unit();
+  const sets = last.sets.filter((x) => x.kind !== 'warmup');
+  const shown = (sets.length ? sets : last.sets).map((x) => summarizeSet(ex.tracking, x, u)).filter((t) => t && t !== '—');
+  return `<div class="last-time">Last time · ${esc(fmtDay(last.startedAt))}: <b>${esc(shown.join(' · ') || '—')}</b>${ex.tracking === 'weight_reps' && shown.length ? ` <span class="faint">${u}</span>` : ''}</div>`;
+}
+function draftStatus() {
+  if (Store.readOnly) return 'Saving is paused (storage could not be read).';
+  if (Store.lastError) return esc(Store.lastError);
+  const at = Math.max(Store.lastDraftAt || 0, Store.lastSavedAt || 0);
+  return at ? `Saved automatically · draft ${esc(toTimeInput(at))}` : 'Everything you type is saved automatically.';
+}
+async function saveDraftNow() {
+  const ok = await Store.flush();
+  const el = $('#draft-status');
+  if (el) el.innerHTML = ok ? `Draft saved ${esc(toTimeInput(Date.now()))}` : draftStatus();
+  return ok;
+}
+A.saveDraft = async () => {
+  const ok = await saveDraftNow();
+  if (ok) await Store.saveDraft({ manual: true });
+  toast(ok ? 'Draft saved on this phone' : 'Could not save. See the message below.');
+};
+A.saveLeave = async () => {
+  const ok = await saveDraftNow();
+  if (!ok) { toast('Could not save. See the message below.'); return; }
+  Rest.stop();
+  toast('Saved. Resume it from Today.');
+  go('today');
+};
+A.workoutDate = () => {
+  const w = curW();
+  if (!w) return;
+  if (isEditing()) {
+    dateSheet({
+      title: 'Workout date',
+      startTs: w.startedAt,
+      durationS: Math.max(60, Math.round((w.finishedAt - w.startedAt) / 1000)),
+      onSave: (ts, dur) => { setWorkoutDate(w, ts, dur); commit(); },
+    });
+    return;
+  }
+  dateSheet({
+    title: 'Workout date',
+    startTs: w.startedAt,
+    durationS: w.plannedDurationS || 3600,
+    okLabel: 'Save',
+    onSave: (ts, dur) => {
+      setWorkoutDate(w, ts, dur);
+      if (!w.backdated) delete w.plannedDurationS;
+      if (w.backdated) Rest.stop();
+      commit();
+      toast(w.backdated ? `Logged as ${fmtDay(w.startedAt)}` : 'Date updated');
+    },
+  });
+};
+
+// ---------- editing a saved workout ----------
+A.editWorkout = (d) => {
+  const cur = editingWorkout(S);
+  if (cur && cur.id !== d.id && editChanged(S)) {
+    menu(`Unsaved edits to “${cur.name}”`, [
+      { label: 'Continue those edits', fn: () => go('edit/' + cur.id) },
+      { label: 'Discard them and edit this one', destructive: true, fn: () => { cancelEdit(S); Store.save(); go('edit/' + d.id); } },
+    ]);
+    return;
+  }
+  if (cur && cur.id !== d.id) cancelEdit(S);
+  go('edit/' + d.id);
+};
+A.editSave = async () => {
+  const w = editingWorkout(S);
+  if (!w) return go('history');
+  const undone = editUndone(S);
+  if (undone && !(await confirmDlg('Save changes?', `${plural(undone, 'unticked set')} will be removed.`, 'Save'))) return;
+  const r = saveEdit(S);
+  if (r.empty) {
+    if (await confirmDlg('No sets left', 'Tick at least one set, or delete the whole workout.', 'Delete workout', true)) {
+      cancelEdit(S);
+      deleteWorkout(S, w.id);
+      Store.permitShrink();
+      await Store.flush();
+      toast('Workout deleted');
+      go('history', { replace: true });
+    }
+    return;
+  }
+  await Store.flush();
+  toast('Changes saved');
+  go('workout/' + w.id, { replace: true });
+};
+A.editCancel = async () => {
+  const w = editingWorkout(S);
+  if (w && editChanged(S) && !(await confirmDlg('Discard changes?', 'The saved workout stays as it was.', 'Discard', true))) return;
+  cancelEdit(S);
+  Store.save();
+  go(w ? 'workout/' + w.id : 'history', { replace: true });
 };
 
 /* ---- 06_templates.js ---- */
@@ -2432,8 +3003,8 @@ A.histSort = () => menu('Sort workouts', HISTORY_SORTS.map((x) => ({ label: (x.i
 
 function fmtRecord(type, value, u) {
   switch (type) {
-    case 'e1rm':
-    case 'weight': return `${Math.round(toDisplayWeight(value, u) * 10) / 10} ${u}`;
+    case 'e1rm': return `${Math.round(toDisplayWeight(value, u) * 10) / 10} ${u}`;
+    case 'weight': return `${fmtWeight(value, u)} ${u}`;
     case 'volume': return `${fmtInt(toDisplayWeight(value, u))} ${u}`;
     case 'reps': return `${value} reps`;
     case 'distance': return `${fmtKm(value)} km`;
@@ -2453,6 +3024,11 @@ VIEWS.workout = (r) => {
   const recs = workoutRecords(S, w.id);
   const info = supersetInfo(w.items.map((i) => i.superset));
   let html = summary ? `<div class="caps accent" style="color:var(--accent)">Workout complete</div>` : '';
+  const ed = editingWorkout(S);
+  if (ed && ed.id === w.id) {
+    html += `<div class="banner info" style="margin-bottom:12px"><div class="bold">You have unsaved edits to this workout</div>
+      <div class="draft-bar"><button class="btn sm primary" data-a="go" data-to="edit/${w.id}">Continue editing</button><button class="btn sm" data-a="editCancel">Discard</button></div></div>`;
+  }
   html += `<h1 style="font-size:28px;letter-spacing:-.02em">${esc(w.name)}</h1><div class="dim">${esc(fmtDate(w.startedAt))} · ${fmtTime(w.startedAt)}</div>
     <div class="mt12">${tagEditor('workout', w)}</div>
     <div class="card mt16"><div class="stats">${stat('duration', fmtDurShort(st.durationS))}${stat('sets', String(st.sets))}${
@@ -2484,8 +3060,9 @@ VIEWS.workout = (r) => {
   });
   html += `</div>`;
   html += summary
-    ? `<button class="btn primary mt24" data-a="summaryDone">Done</button>`
-    : `<button class="btn mt24" data-a="repeatWorkout" data-id="${w.id}">${icon('refresh')} Repeat this workout</button>`;
+    ? `<button class="btn mt24" data-a="editWorkout" data-id="${w.id}">${icon('edit')} Edit workout</button><button class="btn primary mt12" data-a="summaryDone">Done</button>`
+    : `<button class="btn primary mt24" data-a="editWorkout" data-id="${w.id}">${icon('edit')} Edit workout</button>
+       <button class="btn mt12" data-a="repeatWorkout" data-id="${w.id}">${icon('refresh')} Repeat this workout</button>`;
   return {
     title: summary ? 'Summary' : 'Workout',
     left: summary ? '' : backBtn('history'),
@@ -2501,6 +3078,7 @@ A.workoutMenu = (d) => {
   const w = workoutById(S, d.id);
   if (!w) return;
   menu(w.name, [
+    { label: 'Edit workout', fn: () => A.editWorkout({ id: w.id }) },
     { label: 'Repeat this workout', fn: () => startFlow(() => repeatWorkout(S, w.id)) },
     {
       label: 'Save as template',
@@ -2511,6 +3089,15 @@ A.workoutMenu = (d) => {
         go('template/' + id);
       },
     },
+    {
+      label: 'Change date & time',
+      fn: () => dateSheet({
+        title: 'Workout date',
+        startTs: w.startedAt,
+        durationS: Math.max(60, Math.round(((w.finishedAt || Date.now()) - w.startedAt) / 1000)),
+        onSave: (ts, dur) => { setWorkoutDate(w, ts, dur); commit(); toast(`Moved to ${fmtDay(w.startedAt)}`); },
+      }),
+    },
     { label: 'Rename', fn: async () => { const n = await promptDlg('Workout name', w.name); if (n && n.trim()) { w.name = n.trim(); commit(); } } },
     {
       label: 'Delete workout',
@@ -2518,7 +3105,8 @@ A.workoutMenu = (d) => {
       fn: async () => {
         if (!(await confirmDlg('Delete workout?', 'This permanently removes it from your history.', 'Delete', true))) return;
         deleteWorkout(S, w.id);
-        commit({ render: false });
+        Store.permitShrink();
+        await Store.flush();
         go('history', { replace: true });
       },
     },
@@ -2725,8 +3313,18 @@ function exRowHtml(e, { selected = null, action = 'openExercise' } = {}) {
   const sel = selected ? selected.indexOf(e.id) : -1;
   const meta = [e.custom ? 'Yours' : '', e.muscle, e.equipment].filter(Boolean).join(' · ') + (e.timesUsed ? ` · ${e.timesUsed}×` : '');
   return `<button class="list-item" style="width:100%;text-align:left" data-a="${action}" data-id="${e.id}">${exAvatar(e)}
-    <div class="grow"><div class="ell">${esc(e.name)}</div><div class="small dim ell">${esc(meta)}</div></div>
+    <div class="grow"><div class="ell">${esc(e.name)}</div><div class="small dim ell">${esc(meta)}</div>${lastLine(e)}</div>
     ${selected ? `<div class="check ${sel >= 0 ? 'on' : ''}">${sel >= 0 ? sel + 1 : ''}</div>` : icon('chev', 'faint')}</button>`;
+}
+/** "Last Mon 14 Sep · 80×8 · 80×8" for rows in the library and picker. */
+function lastLine(e) {
+  if (!e.lastUsed || !e.lastSets || !e.lastSets.length) return '';
+  const u = unit();
+  const work = e.lastSets.filter((x) => x.kind !== 'warmup');
+  const parts = (work.length ? work : e.lastSets).slice(0, 4).map((x) => summarizeSet(e.tracking, x, u)).filter((t) => t && t !== '—');
+  if (!parts.length) return '';
+  const more = (work.length ? work : e.lastSets).length > 4 ? ' …' : '';
+  return `<div class="tiny faint ell tnum">Last ${esc(fmtDay(e.lastUsed))} · ${esc(parts.join(' · '))}${more}</div>`;
 }
 function exListHtml(list, query, opts) {
   const q = (query || '').trim();
@@ -2833,7 +3431,7 @@ const detailMetric = {};
 function metricsFor(tracking, u) {
   const w = (v) => String(Math.round(toDisplayWeight(v, u) * 10) / 10);
   switch (tracking) {
-    case 'bodyweight_reps': return [{ k: 'reps', label: 'Most reps', v: (st) => st.maxReps, f: (v) => String(Math.round(v)) }];
+    case 'bodyweight_reps': return [{ k: 'reps', label: 'Most reps', v: (st) => st.maxReps, f: (v) => String(Math.round(v * 100) / 100) }];
     case 'time': return [{ k: 'hold', label: 'Longest hold', v: (st, sets) => Math.max(0, ...sets.map((s) => s.durationS || 0)) || null, f: fmtClock }];
     case 'cardio': return [
       { k: 'dist', label: 'Distance', v: (st) => st.distanceM || null, f: (v) => `${fmtKm(v)} km` },
@@ -2931,6 +3529,7 @@ function openPicker(mode, targetId) {
     if (!b) return;
     const asSuperset = b.dataset.pk === 'superset';
     if (mode === 'template') addExercisesToTemplate(S, targetId, st.sel, asSuperset);
+    else if (mode === 'edit') { const ew = editingWorkout(S); if (ew) addExercisesTo(S, ew, st.sel, asSuperset); }
     else addExercisesToWorkout(S, targetId, st.sel, asSuperset);
     Picker.current = null;
     Layer.close();
@@ -3002,7 +3601,7 @@ function agoText(ts) {
 VIEWS.settings = () => {
   const s = S.settings;
   const counts = stateCounts(S);
-  let html = `<div class="caps">Units</div><div class="chips mt8"><button class="chip ${s.unit === 'kg' ? 'on' : ''}" data-a="setUnit" data-u="kg">Kilograms (kg)</button>
+  let html = `${safetyBanners().replace('banner warn mt12', 'banner warn')}${Store.readOnly || Store.lastError ? '<div class="mt16"></div>' : ''}<div class="caps">Units</div><div class="chips mt8"><button class="chip ${s.unit === 'kg' ? 'on' : ''}" data-a="setUnit" data-u="kg">Kilograms (kg)</button>
     <button class="chip ${s.unit === 'lb' ? 'on' : ''}" data-a="setUnit" data-u="lb">Pounds (lb)</button></div>
     <div class="caps mt24">Workout</div><div class="card mt8" style="padding:0 16px">
     ${settingRow('timer', 'Default rest', { value: fmtClock(s.defaultRestS), action: 'pickDefaultRest' })}
@@ -3019,6 +3618,11 @@ VIEWS.settings = () => {
     </div><p class="tiny faint mt8">${plural(counts.workouts, 'workout')}, ${plural(counts.templates, 'template')}, ${plural(counts.custom, 'custom exercise')}.
     Everything stays on this phone. Export now and then and keep the file in iCloud Drive.</p>
     <input type="file" id="import-file" accept="application/json,.json" class="hidden" data-c="importFile">
+    <div class="caps mt24">Data safety</div><div class="card mt8" style="padding:0 16px">
+    <div id="persist-row">${settingRow('shield', 'Protected storage', { value: '…' })}</div>
+    ${settingRow('history', 'Automatic snapshots', { action: 'openSnapshots' })}
+    </div><p class="tiny faint mt8">Updates never touch your data. Knur keeps a snapshot every day (last 7) and one before each update (last 3).
+    Removing the app from the Home Screen deletes everything on the phone, snapshots included, so keep a backup file too.</p>
     <div class="caps mt24">App</div><div class="card mt8" style="padding:0 16px">
     ${settingRow('phone', 'Install on iPhone', { value: isStandalone() ? 'installed' : '', action: 'installHelp' })}
     ${settingRow('refresh', 'Check for an update', { action: 'checkUpdate' })}
@@ -3030,6 +3634,9 @@ VIEWS.settings = () => {
       const p = await Store.restorePoint();
       const row = $('#rp-row');
       if (p && row) row.innerHTML = settingRow('undo', 'Undo last restore / erase', { value: fmtShortDate(p.at), action: 'useRestorePoint' });
+      const persisted = await Store.isPersisted();
+      const pr = $('#persist-row');
+      if (pr) pr.innerHTML = settingRow('shield', 'Protected storage', { value: persisted === true ? 'on' : persisted === false ? (isStandalone() ? 'not granted' : 'install app') : 'unknown' });
     },
   };
 };
@@ -3043,6 +3650,7 @@ A.toggleAwake = () => { S.settings.keepAwake = !S.settings.keepAwake; commit(); 
 
 // ---------- backup ----------
 A.exportBackup = async () => {
+  if (blockedReadOnly()) return; // would export an empty file
   const name = backupFileName();
   const json = JSON.stringify(makeBackup(S));
   const blob = new Blob([json], { type: 'application/json' });
@@ -3081,6 +3689,7 @@ C.importFile = async (d, el) => {
     return;
   }
   const c = stateCounts(next);
+  if (blockedReadOnly()) return;
   const ok = await confirmDlg('Replace all data?', `The backup has ${plural(c.workouts, 'workout')} and ${plural(c.templates, 'template')}. Everything currently in the app is replaced. A restore point is kept so you can undo.`, 'Replace', true);
   if (!ok) return;
   await Store.snapshot('before restore');
@@ -3090,10 +3699,41 @@ C.importFile = async (d, el) => {
 function replaceState(next) {
   next.restTimer = null;
   S = next;
+  Store.permitShrink(); // deliberate: restore / undo / erase may hold fewer workouts
   Store.flush();
   go('today', { replace: true });
 }
+/** Refuse data-replacing actions while storage can't be read (they'd overwrite it). */
+function blockedReadOnly() {
+  if (!Store.readOnly) return false;
+  alertDlg('Saving is paused', 'Your saved data couldn’t be read, so Knur won’t replace it. Close the app completely and open it again.');
+  return true;
+}
+A.openSnapshots = async () => {
+  const list = await Store.listSnapshots();
+  const rows = list.length
+    ? list.map((x) => `<button class="list-item" style="width:100%;text-align:left" data-snap="${esc(x.key)}">${icon(x.kind === 'update' ? 'refresh' : 'history', 'faint')}
+        <div class="grow"><div class="ell">${esc(fmtDate(x.at))} ${esc(fmtTime(x.at))}</div>
+        <div class="small dim ell">${esc(x.reason || '')} · ${plural((x.counts && x.counts.workouts) || 0, 'workout')} · v${esc(x.version || '?')}</div></div>${icon('chev', 'faint')}</button>`).join('')
+    : `<p class="dim" style="text-align:center;margin:24px 0">No snapshots yet. The first one is made tomorrow, or before the next update.</p>`;
+  const el = openSheet({ title: 'Snapshots', body: `<p class="small dim" style="margin-top:0">Copies Knur made automatically on this phone. Restoring one replaces your current data; the current data is kept as “Undo last restore”.</p><div class="card" style="padding:0 16px">${rows}</div>` });
+  el.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-snap]');
+    if (!b || blockedReadOnly()) return;
+    const snap = await Store.getSnapshot(b.dataset.snap);
+    if (!snap) { toast('That snapshot can’t be read'); return; }
+    const ok = await confirmDlg('Restore this snapshot?', `Go back to your data from ${fmtDate(snap.at)} ${fmtTime(snap.at)} (${plural((snap.counts && snap.counts.workouts) || 0, 'workout')}). You can undo this.`, 'Restore', true);
+    if (!ok) return;
+    let next;
+    try { next = normalizeState(JSON.parse(snap.state)); } catch (e) { toast('That snapshot is damaged'); return; }
+    await Store.snapshot('before snapshot restore');
+    Layer.close();
+    replaceState(next);
+    toast('Snapshot restored');
+  });
+};
 A.useRestorePoint = async () => {
+  if (blockedReadOnly()) return;
   const p = await Store.restorePoint();
   if (!p) return;
   const ok = await confirmDlg('Undo?', `Go back to your data from ${fmtDate(p.at)} ${fmtTime(p.at)} (${plural(p.counts.workouts, 'workout')}). Your current data becomes the new restore point.`, 'Undo');
@@ -3104,6 +3744,7 @@ A.useRestorePoint = async () => {
   toast('Done');
 };
 A.eraseAll = async () => {
+  if (blockedReadOnly()) return;
   const ok = await confirmDlg('Erase all data?', 'Deletes every workout, template and custom exercise on this phone. A restore point is kept so you can undo.', 'Erase', true);
   if (!ok) return;
   await Store.snapshot('before erase');
@@ -3174,6 +3815,21 @@ KS.test = function test({ quiet = false } = {}) {
   is('plain minutes', parseDuration('20', 'min'), 1200);
   is('comma minutes', parseDuration('20,5', 'min'), 1230);
   is('bad duration', parseDuration('1:x'), null);
+  is('fraction', parseNumber('8 1/2'), 8.5);
+  is('plain fraction', parseNumber('1/2'), 0.5);
+  is('unicode half', parseNumber('8½'), 8.5);
+  is('unicode half alone', parseNumber('½'), 0.5);
+  is('zero denominator', parseNumber('1/0'), null);
+  is('half rep, comma', parseReps('8,5'), 8.5);
+  is('half rep, fraction', parseReps('7 1/2'), 7.5);
+  is('third rep rounds', parseReps('1/3'), 0.33);
+  is('negative reps', parseReps('-1'), null);
+  is('reps field keeps halves', fieldsFor('weight_reps')[1].parse('8,5'), 8.5);
+  is('reps field uses the decimal pad', fieldsFor('weight_reps')[1].mode, 'decimal');
+  is('weight fraction', fieldsFor('weight_reps')[0].parse('22 1/2', 'kg'), 22.5);
+  is('small plates', fieldsFor('weight_reps')[0].parse('81,25', 'kg'), 81.25);
+  is('half rep summary', summarizeSet('weight_reps', { weightKg: 81.25, reps: 7.5 }, 'kg'), '81.25×7.5');
+  is('half rep volume', setVolume({ weightKg: 80, reps: 8.5 }), 680);
 
   // --- units & formatting ---
   is('lb round trip', toDisplayWeight(fromDisplayWeight(225, 'lb'), 'lb'), 225);
@@ -3414,6 +4070,79 @@ KS.test = function test({ quiet = false } = {}) {
   is('empty report', reportData(normalizeState(null), '12w').totals.workouts, 0);
   is('untagged shown last', R4.tags[R4.tags.length - 1], 'Untagged');
 
+  // --- 1.2: dates, past workouts, drafts, last time ---
+  const dt = fromDateTimeInputs('2026-03-05', '07:09');
+  is('date input round trip', [toDateInput(dt), toTimeInput(dt)], ['2026-03-05', '07:09']);
+  is('bad date', fromDateTimeInputs('05.03.2026', '10:00'), null);
+  is('missing time = noon', toTimeInput(fromDateTimeInputs('2026-03-05', '')), '12:00');
+  is('fmtDay today', fmtDay(Date.now()), 'Today');
+  is('fmtDay yesterday', fmtDay(Date.now() - DAY), 'Yesterday');
+  is('last session = closest to today', previousSession(G, BENCH).workoutId, bench2.id);
+  is('last session values', previousSession(G, BENCH).sets[0].weightKg, 85);
+  is('last session before a date', previousSession(G, BENCH, null, bench2.startedAt).workoutId, mixed.id);
+  is('no session before the first', previousSession(G, BENCH, null, pushW.startedAt), null);
+  is('library row last sets', listExercises(G).find((e) => e.id === BENCH).lastSets[0].weightKg, 85);
+  const pastTs = Date.now() - 10 * DAY;
+  const pastId = startPastWorkout(G, { startTs: pastTs, durationS: 2700 });
+  const past = workoutById(G, pastId);
+  ok('past workout is backdated', past.backdated && past.startedAt === pastTs && !past.finishedAt);
+  addExercisesToWorkout(G, pastId, [BENCH], false);
+  is('past prefill uses sessions before its date', past.items[0].sets[0].weightKg, 80);
+  for (const s of past.items[0].sets) s.done = true;
+  finishWorkout(G, pastId);
+  is('past finish = start + duration', past.finishedAt - past.startedAt, 2700 * 1000);
+  is('history sorted by the past date', historyList(G, { sort: 'new' }).findIndex((w) => w.id === pastId), historyList(G, { sort: 'new' }).findIndex((w) => w.id === cardioW.id) + 1);
+  setWorkoutDate(past, pastTs - DAY, null);
+  is('moving a finished workout keeps its duration', [past.startedAt, past.finishedAt - past.startedAt], [pastTs - DAY, 2700 * 1000]);
+  setWorkoutDate(past, Date.now() + DAY, 600);
+  ok('future dates clamp to now', past.startedAt <= Date.now());
+  const liveId = startWorkout(G);
+  const live = workoutById(G, liveId);
+  setWorkoutDate(live, Date.now() - 3600000);
+  ok('an hour ago stays live', !live.backdated);
+  setWorkoutDate(live, Date.now() - 2 * DAY);
+  ok('two days ago becomes a past entry', live.backdated && live.plannedDurationS === 3600);
+  const draft = { at: Date.now(), workout: JSON.parse(JSON.stringify(live)), exercises: [{ id: 'ex_mine', name: 'Mine', custom: true, tracking: 'weight_reps', muscle: 'Chest', equipment: 'Other' }] };
+  is('no restore while a workout is active', restoreDraft(G, draft), null);
+  deleteWorkout(G, liveId);
+  is('restore draft', restoreDraft(G, draft), liveId);
+  ok('restored draft is in progress', activeWorkout(G) && activeWorkout(G).id === liveId);
+  ok('restored draft brings its custom exercise', !!exById(G, 'ex_mine'));
+  is('restore twice does nothing', restoreDraft(G, draft), null);
+  deleteWorkout(G, liveId);
+
+  // --- 1.3: editing saved workouts ---
+  const origJson = JSON.stringify(workoutById(G, bench2.id));
+  const ew = startEdit(G, bench2.id);
+  ok('edit copy is separate', ew !== workoutById(G, bench2.id) && ew.id === bench2.id);
+  ok('unchanged edit', !editChanged(G));
+  ew.items[0].sets[0].reps = 9.5;
+  ew.items[0].sets[1].done = false;
+  addExercisesTo(G, ew, [ROW], false);
+  is('added exercise prefilled from before this date', ew.items[1].sets[0].weightKg, 50);
+  ok('saved workout untouched while editing', JSON.stringify(workoutById(G, bench2.id)) === origJson);
+  ok('edit detected', editChanged(G));
+  is('unticked sets counted', editUndone(G), 1 + ew.items[1].sets.length);
+  is('startEdit again returns the same copy', startEdit(G, bench2.id) === ew, true);
+  ew.items[1].sets[0].done = true;
+  const nSets = ew.items[0].sets.length;
+  is('save edit', saveEdit(G).ok, true);
+  const edSaved = workoutById(G, bench2.id);
+  is('edit applied', [edSaved.items[0].sets[0].reps, edSaved.items[0].sets.length, edSaved.items.length], [9.5, nSets - 1, 2]);
+  ok('edit cleared and stamped', !G.editing && edSaved.editedAt > 0 && edSaved.finishedAt > edSaved.startedAt);
+  const ew2 = startEdit(G, bench2.id);
+  ew2.name = 'Changed';
+  cancelEdit(G);
+  is('cancel keeps the saved workout', workoutById(G, bench2.id).name !== 'Changed' && !G.editing, true);
+  const ew3 = startEdit(G, bench2.id);
+  for (const it of ew3.items) for (const x of it.sets) x.done = false;
+  const r3 = saveEdit(G);
+  ok('empty edit not saved', r3.empty && !!G.editing && workoutById(G, bench2.id).items.length === 2);
+  cancelEdit(G);
+  is('cannot edit an unfinished workout', startEdit(G, startWorkout(G)), null);
+  deleteWorkout(G, activeWorkout(G).id);
+  is('orphan edit copy dropped on load', normalizeState({ workouts: [], editing: { w: { id: 'gone', items: [] } } }).editing, null);
+
   const result = { passed, failed: failures.length, failures };
   if (!quiet && typeof console !== 'undefined') {
     console.log(`Knur Simulator self-test: ${passed} passed, ${failures.length} failed`);
@@ -3513,10 +4242,33 @@ function registerServiceWorker() {
 }
 
 async function boot() {
-  const { state, fresh } = await Store.load();
+  const { state, fresh, failed } = await Store.load();
   S = state;
-  if (fresh) await Store.flush();
+  if (failed) {
+    // Couldn't read storage: show the warning, write nothing.
+    render();
+    registerServiceWorker();
+    return;
+  }
+  // A draft of an in-progress workout that isn't in the main data (e.g. the save was lost).
+  const draft = await Store.loadDraft();
+  if (draft) {
+    const known = workoutById(S, draft.workout.id);
+    if (known && known.finishedAt) await Store.clearDraft();
+    else if (!known && !activeWorkout(S)) { ui.pendingDraft = draft; Store.keepDraft = true; }
+  }
+  const hasData = S.workouts.length || S.templates.length || S.exercises.some((e) => e.custom);
+  if (S.settings.lastVersion !== APP.version) {
+    // First launch of a new version: keep a copy of the data exactly as the old version left it.
+    if (!fresh && hasData) await Store.snapshotAuto('update', `Before update to ${APP.version}${S.settings.lastVersion ? ` (from ${S.settings.lastVersion})` : ''}`);
+    S.settings.lastVersion = APP.version;
+    await Store.flush();
+  } else if (fresh) {
+    await Store.flush();
+  }
+  await Store.dailySnapshot();
   Store.persist();
+
   if (/[?&]demo=1\b/.test(location.search) && !S.workouts.length) KS.demo();
   if (S.restTimer) Rest.ensureTicking();
   render();
