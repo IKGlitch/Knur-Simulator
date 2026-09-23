@@ -1,0 +1,2974 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Knur Simulator</title>
+<meta name="description" content="Gym planner and workout log. Offline, on your phone.">
+<meta name="theme-color" content="#0B0B0C">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Knur">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+:root {
+  --bg: #0B0B0C; --surface: #141416; --surface2: #1C1C1F; --surface3: #26262A; --border: #2A2A2E;
+  --text: #F2F2F3; --dim: #9A9AA2; --faint: #5E5E66;
+  --accent: #CFFF4A; --accent-dim: rgba(207,255,74,.12); --on-accent: #0B0B0C;
+  --danger: #FF5A5F; --danger-dim: rgba(255,90,95,.12); --cardio: #5AC8FA; --warm: #FF9F0A;
+  --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
+  --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+  --tabs-h: 56px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { min-height: 100vh; overscroll-behavior-y: none; font-size: 16px; line-height: 1.35; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+input, textarea, select { font: inherit; color: var(--text); }
+/* 16px+ on inputs stops iOS zooming in on focus */
+input, textarea, select { font-size: 17px; }
+h1, h2, h3, p { margin: 0; }
+a { color: var(--accent); }
+svg { width: 20px; height: 20px; flex: none; }
+svg.chart { width: 100%; height: auto; display: block; }
+.hidden { display: none !important; }
+.tnum { font-variant-numeric: tabular-nums; }
+.dim { color: var(--dim); } .faint { color: var(--faint); } .accent { color: var(--accent); } .cardio { color: var(--cardio); } .danger { color: var(--danger); }
+.small { font-size: 13px; } .tiny { font-size: 11px; } .bold { font-weight: 700; }
+.caps { text-transform: uppercase; letter-spacing: .08em; font-size: 12px; font-weight: 600; color: var(--dim); }
+.row { display: flex; align-items: center; gap: 8px; } .col { display: flex; flex-direction: column; } .grow { flex: 1; min-width: 0; }
+.between { justify-content: space-between; } .wrap { flex-wrap: wrap; } .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt4 { margin-top: 4px; } .mt8 { margin-top: 8px; } .mt12 { margin-top: 12px; } .mt16 { margin-top: 16px; } .mt24 { margin-top: 24px; }
+
+/* ---------- layout ---------- */
+#top { position: sticky; top: 0; z-index: 20; background: rgba(11,11,12,.92); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  padding: calc(var(--sat) + 6px) 12px 6px; min-height: calc(var(--sat) + 50px); display: flex; align-items: center; gap: 8px; }
+#top .t-title { flex: 1; min-width: 0; text-align: center; font-weight: 600; font-size: 17px; }
+#top .t-side { min-width: 72px; display: flex; align-items: center; }
+#top .t-side.right { justify-content: flex-end; }
+#top.large .t-title { text-align: left; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
+#top.large .t-side.left { display: none; }
+#view { padding: 4px 16px calc(var(--tabs-h) + var(--sab) + 32px); max-width: 640px; margin: 0 auto; }
+body.no-tabs #view { padding-bottom: calc(var(--sab) + 120px); }
+#tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; background: rgba(11,11,12,.95);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-top: 1px solid var(--border); padding-bottom: var(--sab); }
+body.no-tabs #tabs { display: none; }
+#tabs a { flex: 1; height: var(--tabs-h); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  color: var(--faint); text-decoration: none; font-size: 11px; font-weight: 600; }
+#tabs a.on { color: var(--accent); }
+#tabs svg { width: 24px; height: 24px; }
+
+/* ---------- controls ---------- */
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 50px; padding: 0 20px; border-radius: var(--r-md);
+  font-weight: 700; font-size: 16px; background: var(--surface2); color: var(--text); width: 100%; }
+.btn.primary { background: var(--accent); color: var(--on-accent); }
+.btn.danger { background: var(--danger-dim); color: var(--danger); }
+.btn.ghost { background: transparent; color: var(--accent); }
+.btn.sm { min-height: 36px; padding: 0 14px; border-radius: var(--r-sm); font-size: 15px; width: auto; }
+.btn:active { opacity: .7; }
+.btn svg { width: 18px; height: 18px; }
+.icon-btn { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 19px; color: var(--dim); }
+.icon-btn:active { background: var(--surface2); }
+.icon-btn svg { width: 22px; height: 22px; }
+.link { color: var(--accent); font-weight: 600; font-size: 15px; }
+.back { color: var(--accent); display: inline-flex; align-items: center; font-size: 17px; margin-left: -6px; }
+.back svg { width: 26px; height: 26px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px; }
+.card.tap:active { background: var(--surface2); }
+.card.accent-border { border-color: var(--accent); }
+.stack > * + * { margin-top: 8px; }
+.section { display: flex; justify-content: space-between; align-items: center; margin: 24px 0 8px; }
+.chip { display: inline-flex; align-items: center; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--dim); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.chips::-webkit-scrollbar { display: none; }
+.chips.wrap { flex-wrap: wrap; overflow: visible; }
+.pill { display: inline-block; padding: 2px 7px; border-radius: 6px; background: var(--surface3); color: var(--dim); font-size: 11px; font-weight: 700; }
+.badge { display: inline-block; padding: 2px 6px; border-radius: 6px; font-size: 12px; font-weight: 800; color: var(--on-accent); }
+.stats { display: flex; gap: 8px; } .stats > div { flex: 1; min-width: 0; }
+.stat-v { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; } .stat-l { font-size: 12px; color: var(--dim); }
+.field { width: 100%; height: 50px; padding: 0 14px; border-radius: var(--r-md); border: 0; background: var(--surface2); outline: none; }
+.field:focus { box-shadow: 0 0 0 2px var(--accent); }
+textarea.field { height: auto; min-height: 44px; padding: 10px 12px; resize: none; font-size: 16px; line-height: 1.35; }
+.title-input { width: 100%; background: transparent; border: 0; outline: none; font-size: 28px; font-weight: 800; letter-spacing: -.02em; padding: 4px 0; }
+.list-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.list-item:last-child { border-bottom: 0; }
+.avatar { width: 36px; height: 36px; flex: 0 0 36px; border-radius: var(--r-sm); background: var(--surface2); display: flex; align-items: center; justify-content: center; color: var(--dim); }
+.avatar.cardio { background: rgba(90,200,250,.12); color: var(--cardio); }
+.avatar svg { width: 18px; height: 18px; }
+.empty { text-align: center; padding: 56px 24px; color: var(--dim); }
+.empty svg { width: 40px; height: 40px; color: var(--faint); }
+.empty h3 { color: var(--text); font-size: 18px; margin: 12px 0 4px; }
+.setting { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 0; border-bottom: 1px solid var(--border); width: 100%; text-align: left; }
+.setting:last-child { border-bottom: 0; }
+.setting svg { width: 20px; height: 20px; color: var(--dim); flex: 0 0 20px; }
+.setting .chev { width: 16px; height: 16px; color: var(--faint); }
+.switch { position: relative; width: 50px; height: 30px; flex: 0 0 50px; border-radius: 15px; background: var(--surface3); transition: background .15s; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 12px; background: var(--text); transition: transform .15s; }
+.switch.on { background: var(--accent); } .switch.on::after { transform: translateX(20px); background: var(--on-accent); }
+
+/* ---------- workout ---------- */
+.ex { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 4px; margin-bottom: 12px; }
+.ex.ss { border-left-width: 3px; }
+.ex.linked-below { margin-bottom: 2px; border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; }
+.ex.linked-above { border-top-left-radius: 4px; border-top-right-radius: 4px; }
+.ex-head { display: flex; align-items: center; gap: 8px; padding: 0 8px 4px; }
+.ex-name { font-size: 18px; font-weight: 700; }
+.sets { width: 100%; border-collapse: separate; border-spacing: 0 3px; table-layout: fixed; }
+.sets th { font-size: 10px; letter-spacing: .06em; color: var(--faint); font-weight: 700; padding: 2px 0; }
+.sets td { padding: 0 3px; text-align: center; }
+.sets tr.done td { background: var(--accent-dim); }
+.sets tr.done td:first-child { border-radius: 8px 0 0 8px; } .sets tr.done td:last-child { border-radius: 0 8px 8px 0; }
+.c-set { width: 34px; } .c-prev { width: 76px; } .c-chk { width: 50px; }
+.set-no { font-weight: 700; color: var(--dim); height: 40px; width: 100%; }
+.set-no.warmup { color: var(--warm); } .set-no.drop { color: var(--cardio); } .set-no.failure { color: var(--danger); }
+.prev { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.num { width: 100%; height: 40px; border: 0; border-radius: 8px; background: var(--surface2); text-align: center; font-weight: 600;
+  font-variant-numeric: tabular-nums; outline: none; padding: 0 2px; font-size: 17px; }
+.num::placeholder { color: var(--faint); font-weight: 500; }
+.num:focus { box-shadow: 0 0 0 2px var(--accent); }
+tr.done .num { background: transparent; }
+.chk { width: 44px; height: 38px; border-radius: 8px; background: var(--surface3); color: var(--faint); display: inline-flex; align-items: center; justify-content: center; }
+.chk svg { width: 20px; height: 20px; }
+tr.done .chk { background: var(--accent); color: var(--on-accent); }
+.pace { text-align: right; padding-right: 56px; font-size: 12px; color: var(--dim); }
+.add-set svg { width: 16px; height: 16px; }
+.add-set { display: flex; align-items: center; justify-content: center; gap: 4px; height: 36px; margin: 8px 8px 0; border-radius: 8px; background: var(--surface2); color: var(--dim); font-weight: 600; font-size: 14px; width: calc(100% - 16px); }
+.note { width: calc(100% - 16px); margin: 0 8px 8px; min-height: 40px; padding: 8px 10px; border-radius: 8px; border: 0; background: var(--surface2); font-size: 16px; resize: none; outline: none; }
+#restbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; background: var(--surface2); border-top: 1px solid var(--border); padding: 12px 12px calc(12px + var(--sab)); display: none; }
+#restbar.show { display: block; }
+#restbar .prog { position: absolute; left: 0; top: 0; height: 3px; background: var(--accent); }
+#restbar .adj { min-width: 56px; height: 42px; border-radius: 8px; background: var(--surface3); font-weight: 700; font-size: 15px; }
+#restbar .adj.skip { background: var(--accent); color: var(--on-accent); }
+#restbar .time { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; text-align: center; }
+#restbar.flash { animation: flash .5s 3; }
+@keyframes flash { 50% { background: var(--accent); color: var(--on-accent); } }
+.finish-btn { background: var(--accent); color: var(--on-accent); font-weight: 700; border-radius: 8px; height: 34px; padding: 0 14px; font-size: 15px; }
+
+/* ---------- template editor ---------- */
+.stepper { display: flex; align-items: center; justify-content: space-between; height: 40px; border-radius: 8px; background: var(--surface2); }
+.stepper button { width: 34px; height: 40px; font-size: 20px; font-weight: 600; }
+.flabel { font-size: 10px; font-weight: 700; color: var(--dim); letter-spacing: .06em; text-align: center; margin-bottom: 3px; }
+
+/* ---------- overlays ---------- */
+#layer { position: fixed; inset: 0; z-index: 100; pointer-events: none; }
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.55); pointer-events: auto; animation: fade .15s; }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 92vh; background: var(--surface); border-radius: 16px 16px 0 0; pointer-events: auto;
+  display: flex; flex-direction: column; padding-bottom: var(--sab); animation: up .2s ease-out; max-width: 640px; margin: 0 auto; }
+.sheet.full { top: calc(var(--sat) + 12px); max-height: none; }
+.sheet-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px 8px; }
+.sheet-head h2 { flex: 1; font-size: 17px; text-align: center; }
+.sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 16px 16px; flex: 1; }
+.sheet-foot { padding: 12px 16px; border-top: 1px solid var(--border); }
+.menu { padding: 8px 12px 12px; }
+.menu h3 { font-size: 13px; color: var(--dim); text-align: center; font-weight: 600; padding: 8px 0 10px; }
+.menu button { display: block; width: 100%; min-height: 52px; background: var(--surface2); font-size: 17px; text-align: center; }
+.menu button + button { border-top: 1px solid var(--border); }
+.menu button:first-of-type { border-radius: 12px 12px 0 0; } .menu button:last-of-type { border-radius: 0 0 12px 12px; }
+.menu button:only-of-type { border-radius: 12px; }
+.menu button.destructive { color: var(--danger); }
+.menu .cancel { margin-top: 8px; border-radius: 12px !important; font-weight: 700; border-top: 0 !important; }
+.dialog { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(320px, calc(100vw - 48px)); background: var(--surface2);
+  border-radius: 16px; pointer-events: auto; overflow: hidden; animation: pop .15s; }
+.dialog .d-body { padding: 20px 18px 16px; text-align: center; }
+.dialog h3 { font-size: 17px; margin-bottom: 6px; } .dialog p { color: var(--dim); font-size: 14px; white-space: pre-line; }
+.dialog .d-btns { display: flex; border-top: 1px solid var(--border); }
+.dialog .d-btns button { flex: 1; height: 48px; font-size: 17px; color: var(--accent); }
+.dialog .d-btns button + button { border-left: 1px solid var(--border); font-weight: 700; }
+.dialog .d-btns button.destructive { color: var(--danger); }
+.dialog .field { margin-top: 12px; height: 44px; background: var(--surface3); }
+#toast { position: fixed; left: 50%; bottom: calc(var(--tabs-h) + var(--sab) + 16px); transform: translateX(-50%); z-index: 200; background: var(--surface3);
+  color: var(--text); padding: 10px 16px; border-radius: 12px; font-size: 14px; font-weight: 600; max-width: calc(100vw - 32px); box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  opacity: 0; transition: opacity .2s; pointer-events: none; text-align: center; }
+#toast.show { opacity: 1; }
+body.no-tabs #toast { bottom: calc(var(--sab) + 100px); }
+.sel-bar { display: flex; gap: 8px; }
+.search { display: flex; align-items: center; gap: 8px; background: var(--surface2); border-radius: var(--r-md); padding: 0 12px; }
+.search input { flex: 1; height: 44px; border: 0; background: transparent; outline: none; }
+.search svg { width: 18px; height: 18px; color: var(--faint); }
+.check { width: 26px; height: 26px; border-radius: 13px; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; }
+.check.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.install { border: 1px dashed var(--accent); }
+@keyframes fade { from { opacity: 0; } } @keyframes up { from { transform: translateY(40px); opacity: .5; } } @keyframes pop { from { transform: translate(-50%, -48%) scale(.96); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header id="top"></header>
+<main id="view"></main>
+<div id="restbar"></div>
+<nav id="tabs"></nav>
+<div id="layer"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+window.KS_SITE = true;
+/* ---- 02_core.js ---- */
+'use strict';
+/* ==========================================================================
+   02_core — namespace, ids, parsing, units, formatting. DOM-free (runs in Node
+   for the test runner).
+   ========================================================================== */
+const ROOT = typeof window !== 'undefined' ? window : globalThis;
+const APP = { name: 'Knur Simulator', short: 'Knur', version: '1.0.0', built: '2026-09-23' };
+const KS = (ROOT.KS = ROOT.KNUR = ROOT.KS || { APP });
+KS.APP = APP;
+
+// ---------- ids ----------
+let _idCounter = 0;
+/** Short, sortable, collision-resistant text id. */
+function newId() {
+  _idCounter = (_idCounter + 1) % 1296;
+  return (
+    Date.now().toString(36) +
+    _idCounter.toString(36).padStart(2, '0') +
+    Math.random().toString(36).slice(2, 8).padEnd(6, '0')
+  );
+}
+
+// ---------- parsing (phone keypads: Polish iPhones type a comma) ----------
+/** "82,5" | "82.5" | " 100 " → number; "" / junk → null. */
+function parseNumber(input) {
+  if (input == null) return null;
+  const s = String(input).trim().replace(/\s+/g, '').replace(',', '.');
+  if (s === '') return null;
+  if (!/^-?\d*\.?\d+$|^-?\d+\.$/.test(s)) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Non-negative integer or null. */
+function parseCount(input) {
+  const n = parseNumber(input);
+  if (n == null || n < 0) return null;
+  return Math.round(n);
+}
+
+/** "1:30" → 90, "1:02:03" → 3723; a plain number is read in `plainUnit` ('sec' | 'min'). */
+function parseDuration(input, plainUnit = 'sec') {
+  if (input == null) return null;
+  const s = String(input).trim().replace(',', '.');
+  if (s === '') return null;
+  if (s.includes(':')) {
+    const parts = s.split(':');
+    if (parts.length > 3 || parts.some((p) => !/^\d+$/.test(p))) return null;
+    return parts.reduce((acc, p) => acc * 60 + Number(p), 0);
+  }
+  const n = parseNumber(s);
+  if (n == null || n < 0) return null;
+  return Math.round(plainUnit === 'min' ? n * 60 : n);
+}
+
+// ---------- units (always store kg / metres / seconds) ----------
+const KG_PER_LB = 0.45359237;
+const round = (n, d) => Math.round(n * 10 ** d) / 10 ** d;
+function toDisplayWeight(kg, unit) {
+  return unit === 'lb' ? round(kg / KG_PER_LB, 1) : round(kg, 2);
+}
+function fromDisplayWeight(value, unit) {
+  return unit === 'lb' ? value * KG_PER_LB : value;
+}
+function fmtWeight(kg, unit) {
+  return kg == null ? '' : String(toDisplayWeight(kg, unit));
+}
+function fmtKm(m) {
+  return m == null ? '' : String(round(m / 1000, 2));
+}
+
+// ---------- formatting ----------
+const pad2 = (n) => String(n).padStart(2, '0');
+/** 75 → "1:15", 3723 → "1:02:03". */
+function fmtClock(total) {
+  const s = Math.max(0, Math.round(total));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return h > 0 ? `${h}:${pad2(m)}:${pad2(sec)}` : `${m}:${pad2(sec)}`;
+}
+/** 3900 → "1h 5m", 600 → "10m", 45 → "45s". */
+function fmtDurShort(total) {
+  const s = Math.max(0, Math.round(total));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
+}
+/** 1200 s over 4000 m → "5:00 /km". */
+function fmtPace(durationS, distanceM) {
+  if (!durationS || !distanceM || distanceM <= 0) return null;
+  return `${fmtClock(durationS / (distanceM / 1000))} /km`;
+}
+/** 12450 → "12 450". */
+function fmtInt(n) {
+  return Math.round(n)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "Tue 23 Sep" (+ year when not the current year). */
+function fmtDate(ts, now = Date.now()) {
+  const d = new Date(ts);
+  const base = `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  return d.getFullYear() === new Date(now).getFullYear() ? base : `${base} ${d.getFullYear()}`;
+}
+function fmtShortDate(ts) {
+  const d = new Date(ts);
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+function fmtMonth(ts) {
+  const d = new Date(ts);
+  return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+function fmtTime(ts) {
+  const d = new Date(ts);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+function defaultWorkoutName(ts) {
+  const h = new Date(ts).getHours();
+  if (h < 11) return 'Morning workout';
+  if (h < 17) return 'Afternoon workout';
+  return 'Evening workout';
+}
+/** Monday 00:00 of the week containing `ts`. */
+function startOfWeek(ts = Date.now()) {
+  const d = new Date(ts);
+  const day = (d.getDay() + 6) % 7;
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - day);
+  return d.getTime();
+}
+/** plural(3, 'set') → "3 sets"; consonant + y → ies; pass `many` for irregulars. */
+function plural(n, one, many) {
+  if (n === 1) return `${n} ${one}`;
+  if (many) return `${n} ${many}`;
+  if (/[^aeiou]y$/i.test(one)) return `${n} ${one.slice(0, -1)}ies`;
+  return `${n} ${one}s`;
+}
+/** HTML-escape anything that goes into a template string. */
+function esc(v) {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+Object.assign(KS, {
+  newId, parseNumber, parseCount, parseDuration, toDisplayWeight, fromDisplayWeight, fmtWeight, fmtKm,
+  fmtClock, fmtDurShort, fmtPace, fmtInt, fmtDate, fmtShortDate, fmtMonth, fmtTime, defaultWorkoutName,
+  startOfWeek, plural, esc, KG_PER_LB,
+});
+
+/* ---- 02b_calc.js ---- */
+/* ==========================================================================
+   02b_calc — supersets, stats & records, prefill, set fields. Pure functions;
+   all training maths lives here and views never recompute it.
+   Field names on sets: kind, weightKg, reps, durationS, distanceM, calories.
+   ========================================================================== */
+
+// ---------- supersets ----------
+// A superset is a contiguous run of items sharing the same `superset` key.
+// Single-member groups are normalised to null.
+function keysToLinks(keys) {
+  return keys.slice(0, -1).map((k, i) => k != null && k === keys[i + 1]);
+}
+function linksToKeys(links, count) {
+  const keys = new Array(count).fill(null);
+  let i = 0;
+  while (i < count) {
+    let j = i;
+    while (j < count - 1 && links[j]) j++;
+    if (j > i) for (let k = i; k <= j; k++) keys[k] = `s${i}`;
+    i = j + 1;
+  }
+  return keys;
+}
+function normalizeKeys(keys) {
+  return linksToKeys(keysToLinks(keys), keys.length);
+}
+/** Link / unlink item `index` with the next one. */
+function toggleLinkWithNext(keys, index) {
+  if (index < 0 || index >= keys.length - 1) return normalizeKeys(keys);
+  const links = keysToLinks(keys);
+  links[index] = !links[index];
+  return linksToKeys(links, keys.length);
+}
+/** Per item: {label: 'A1'|null, group: 0|null, isFirst, isLast}. */
+function supersetInfo(keys) {
+  const links = keysToLinks(keys);
+  const out = [];
+  let group = -1;
+  let pos = 0;
+  for (let i = 0; i < keys.length; i++) {
+    const prev = i > 0 && links[i - 1];
+    const next = i < keys.length - 1 && links[i];
+    if (!prev && !next) {
+      out.push({ label: null, group: null, isFirst: true, isLast: true });
+      continue;
+    }
+    if (!prev) {
+      group++;
+      pos = 0;
+    }
+    pos++;
+    out.push({ label: String.fromCharCode(65 + (group % 26)) + pos, group, isFirst: !prev, isLast: !next });
+  }
+  return out;
+}
+/** Rest only after the last exercise of a superset round. */
+function shouldRestAfter(keys, index) {
+  const info = supersetInfo(keys)[index];
+  return info ? info.isLast : true;
+}
+
+// ---------- stats & records ----------
+const E1RM_MAX_REPS = 12;
+/** Epley estimated 1RM; null outside 1–12 reps (high-rep estimates mislead). */
+function estimate1RM(weightKg, reps) {
+  if (weightKg == null || reps == null || weightKg <= 0 || reps < 1 || reps > E1RM_MAX_REPS) return null;
+  return reps === 1 ? weightKg : weightKg * (1 + reps / 30);
+}
+function setVolume(s) {
+  return s.weightKg == null || s.reps == null ? 0 : s.weightKg * s.reps;
+}
+/** Aggregate completed sets. Warm-ups count as sets but not towards volume or records. */
+function sessionStats(sets) {
+  const st = { sets: sets.length, reps: 0, volumeKg: 0, bestE1rm: null, maxWeight: null, maxReps: null, durationS: 0, distanceM: 0, calories: 0 };
+  for (const s of sets) {
+    st.durationS += s.durationS || 0;
+    st.distanceM += s.distanceM || 0;
+    st.calories += s.calories || 0;
+    if (s.kind === 'warmup') continue;
+    st.reps += s.reps || 0;
+    st.volumeKg += setVolume(s);
+    const e = estimate1RM(s.weightKg, s.reps);
+    if (e != null && (st.bestE1rm == null || e > st.bestE1rm)) st.bestE1rm = e;
+    if (s.weightKg != null && s.reps > 0 && (st.maxWeight == null || s.weightKg > st.maxWeight)) st.maxWeight = s.weightKg;
+    if (s.reps != null && (st.maxReps == null || s.reps > st.maxReps)) st.maxReps = s.reps;
+  }
+  return st;
+}
+/** Fastest pace in s/km (ignores bits shorter than 200 m). */
+function bestPace(sets) {
+  let best = null;
+  for (const s of sets) {
+    if (!s.durationS || !s.distanceM || s.distanceM < 200) continue;
+    const p = s.durationS / (s.distanceM / 1000);
+    if (best == null || p < best) best = p;
+  }
+  return best;
+}
+function longestHold(sets) {
+  return sets.reduce((m, s) => Math.max(m, s.durationS || 0), 0) || null;
+}
+const RECORD_LABELS = {
+  e1rm: 'Est. 1RM', weight: 'Heaviest weight', volume: 'Session volume', reps: 'Most reps',
+  distance: 'Longest distance', duration: 'Longest hold', pace: 'Fastest pace',
+};
+/** Records beaten by `current` vs all `previousSessions`. Nothing counts on the first session. */
+function detectRecords(tracking, current, previousSessions) {
+  if (!previousSessions.length || !current.length) return [];
+  const cur = sessionStats(current);
+  const prev = previousSessions.map(sessionStats);
+  const hits = [];
+  const check = (type, value, prevValues, lowerIsBetter = false) => {
+    if (value == null || value <= 0) return;
+    const valid = prevValues.filter((v) => v != null && v > 0);
+    const best = valid.length ? (lowerIsBetter ? Math.min(...valid) : Math.max(...valid)) : null;
+    if (best == null || (lowerIsBetter ? value < best : value > best)) hits.push({ type, value, previous: best });
+  };
+  if (tracking === 'weight_reps') {
+    check('e1rm', cur.bestE1rm, prev.map((p) => p.bestE1rm));
+    check('weight', cur.maxWeight, prev.map((p) => p.maxWeight));
+    check('volume', cur.volumeKg, prev.map((p) => p.volumeKg));
+  } else if (tracking === 'bodyweight_reps') {
+    check('reps', cur.maxReps, prev.map((p) => p.maxReps));
+  } else if (tracking === 'time') {
+    check('duration', longestHold(current), previousSessions.map(longestHold));
+  } else if (tracking === 'cardio') {
+    check('distance', cur.distanceM, prev.map((p) => p.distanceM));
+    check('pace', bestPace(current), previousSessions.map(bestPace), true);
+  }
+  return hits;
+}
+
+// ---------- prefill ----------
+function initialSetCount(tracking, target, previous) {
+  if (target && target.sets > 0) return target.sets;
+  if (previous.length) return previous.length;
+  return tracking === 'cardio' ? 1 : 3;
+}
+/** Values for set `index`: same set last session → last set last session → template target. */
+function prefillSet(index, previous, target) {
+  const prev = previous[index] || previous[previous.length - 1];
+  const t = target || {};
+  return {
+    kind: prev && prev.kind === 'warmup' && previous[index] ? 'warmup' : 'working',
+    weightKg: prev?.weightKg ?? t.weightKg ?? null,
+    reps: prev?.reps ?? t.repMin ?? t.repMax ?? null,
+    durationS: prev?.durationS ?? t.durationS ?? null,
+    distanceM: prev?.distanceM ?? t.distanceM ?? null,
+    calories: null,
+  };
+}
+/** "3 × 6–8", "4 × 10", "20 min", "20 min · 3.5 km". */
+function formatTarget(tracking, t) {
+  if (!t) return '';
+  if (tracking === 'cardio' || tracking === 'time') {
+    const parts = [];
+    if (t.durationS) parts.push(tracking === 'cardio' ? `${Math.round(t.durationS / 60)} min` : fmtClock(t.durationS));
+    if (t.distanceM) parts.push(`${round(t.distanceM / 1000, 2)} km`);
+    const body = parts.join(' · ');
+    if (tracking === 'time' && t.sets > 1) return body ? `${t.sets} × ${body}` : `${t.sets} sets`;
+    return body || (t.sets ? plural(t.sets, 'set') : '');
+  }
+  let reps = '';
+  if (t.repMin && t.repMax && t.repMin !== t.repMax) reps = `${t.repMin}–${t.repMax}`;
+  else if (t.repMin || t.repMax) reps = String(t.repMin || t.repMax);
+  if (t.sets && reps) return `${t.sets} × ${reps}`;
+  if (t.sets) return plural(t.sets, 'set');
+  return reps ? `${reps} reps` : '';
+}
+
+// ---------- set fields per tracking type ----------
+const F_WEIGHT = {
+  key: 'weightKg', mode: 'decimal', label: (u) => u,
+  format: (v, u) => fmtWeight(v, u),
+  parse: (t, u) => { if (!t.trim()) return null; const n = parseNumber(t); return n == null || n < 0 ? undefined : fromDisplayWeight(n, u); },
+};
+const F_ADDED = { ...F_WEIGHT, label: (u) => '+' + u };
+const F_REPS = {
+  key: 'reps', mode: 'numeric', label: () => 'reps',
+  format: (v) => (v == null ? '' : String(v)),
+  parse: (t) => (!t.trim() ? null : parseCount(t) ?? undefined),
+};
+const F_SECONDS = {
+  key: 'durationS', mode: 'text', label: () => 'time',
+  format: (v) => (v == null ? '' : fmtClock(v)),
+  parse: (t) => (!t.trim() ? null : parseDuration(t, 'sec') ?? undefined),
+};
+const F_MINUTES = { ...F_SECONDS, label: () => 'min', parse: (t) => (!t.trim() ? null : parseDuration(t, 'min') ?? undefined) };
+const F_KM = {
+  key: 'distanceM', mode: 'decimal', label: () => 'km',
+  format: (v) => fmtKm(v),
+  parse: (t) => { if (!t.trim()) return null; const n = parseNumber(t); return n == null || n < 0 ? undefined : n * 1000; },
+};
+const F_KCAL = { key: 'calories', mode: 'numeric', label: () => 'kcal', format: (v) => (v == null ? '' : String(v)), parse: (t) => (!t.trim() ? null : parseCount(t) ?? undefined) };
+
+function fieldsFor(tracking) {
+  switch (tracking) {
+    case 'weight_reps': return [F_WEIGHT, F_REPS];
+    case 'bodyweight_reps': return [F_ADDED, F_REPS];
+    case 'time': return [F_SECONDS];
+    case 'cardio': return [F_MINUTES, F_KM, F_KCAL];
+    default: return [F_WEIGHT, F_REPS];
+  }
+}
+/** "80×8", "+10×12", "1:00", "20:00 · 3.2 km", "—". */
+function summarizeSet(tracking, s, unit) {
+  if (!s) return '—';
+  switch (tracking) {
+    case 'weight_reps':
+      if (s.reps == null) return '—';
+      return s.weightKg != null ? `${fmtWeight(s.weightKg, unit)}×${s.reps}` : `${s.reps} reps`;
+    case 'bodyweight_reps':
+      if (s.reps == null) return '—';
+      return s.weightKg ? `+${fmtWeight(s.weightKg, unit)}×${s.reps}` : `${s.reps} reps`;
+    case 'time':
+      return s.durationS != null ? fmtClock(s.durationS) : '—';
+    case 'cardio': {
+      const p = [];
+      if (s.durationS) p.push(fmtClock(s.durationS));
+      if (s.distanceM) p.push(`${fmtKm(s.distanceM)} km`);
+      return p.length ? p.join(' · ') : '—';
+    }
+  }
+  return '—';
+}
+/** Minimum data for a set to be ticked. */
+function isLoggable(tracking, s) {
+  if (tracking === 'time') return s.durationS > 0;
+  if (tracking === 'cardio') return (s.durationS || 0) > 0 || (s.distanceM || 0) > 0;
+  return s.reps != null && s.reps > 0;
+}
+
+Object.assign(KS, {
+  keysToLinks, linksToKeys, normalizeKeys, toggleLinkWithNext, supersetInfo, shouldRestAfter,
+  estimate1RM, setVolume, sessionStats, bestPace, detectRecords, RECORD_LABELS,
+  initialSetCount, prefillSet, formatTarget, fieldsFor, summarizeSet, isLoggable,
+});
+
+/* ---- 02c_model.js ---- */
+/* ==========================================================================
+   02c_model — state shape, exercise seed, and every operation on the data.
+   Functions take the state object explicitly so the test runner can use a
+   throwaway state. Timestamps are epoch ms. Weights kg, distance m, time s.
+   ========================================================================== */
+
+const SCHEMA = 1;
+
+const SEED_STRENGTH = [
+  ['Bench Press', 'Chest', 'Barbell'], ['Incline Bench Press', 'Chest', 'Barbell'],
+  ['Dumbbell Bench Press', 'Chest', 'Dumbbell'], ['Incline Dumbbell Press', 'Chest', 'Dumbbell'],
+  ['Chest Press', 'Chest', 'Machine'], ['Cable Fly', 'Chest', 'Cable'], ['Pec Deck', 'Chest', 'Machine'],
+  ['Push-up', 'Chest', 'Bodyweight', 'bodyweight_reps'], ['Dips', 'Chest', 'Bodyweight', 'bodyweight_reps'],
+  ['Deadlift', 'Back', 'Barbell'], ['Barbell Row', 'Back', 'Barbell'], ['Dumbbell Row', 'Back', 'Dumbbell'],
+  ['Pull-up', 'Back', 'Bodyweight', 'bodyweight_reps'], ['Chin-up', 'Back', 'Bodyweight', 'bodyweight_reps'],
+  ['Lat Pulldown', 'Back', 'Cable'], ['Seated Cable Row', 'Back', 'Cable'], ['T-Bar Row', 'Back', 'Barbell'],
+  ['Chest-Supported Row', 'Back', 'Machine'], ['Straight-Arm Pulldown', 'Back', 'Cable'],
+  ['Back Extension', 'Back', 'Bodyweight', 'bodyweight_reps'],
+  ['Overhead Press', 'Shoulders', 'Barbell'], ['Dumbbell Shoulder Press', 'Shoulders', 'Dumbbell'],
+  ['Shoulder Press', 'Shoulders', 'Machine'], ['Lateral Raise', 'Shoulders', 'Dumbbell'],
+  ['Cable Lateral Raise', 'Shoulders', 'Cable'], ['Rear Delt Fly', 'Shoulders', 'Dumbbell'],
+  ['Face Pull', 'Shoulders', 'Cable'], ['Shrug', 'Shoulders', 'Dumbbell'],
+  ['Barbell Curl', 'Biceps', 'Barbell'], ['Dumbbell Curl', 'Biceps', 'Dumbbell'], ['Hammer Curl', 'Biceps', 'Dumbbell'],
+  ['Preacher Curl', 'Biceps', 'Machine'], ['Cable Curl', 'Biceps', 'Cable'],
+  ['Triceps Pushdown', 'Triceps', 'Cable'], ['Overhead Triceps Extension', 'Triceps', 'Cable'],
+  ['Skull Crusher', 'Triceps', 'Barbell'], ['Close-Grip Bench Press', 'Triceps', 'Barbell'],
+  ['Squat', 'Quads', 'Barbell'], ['Front Squat', 'Quads', 'Barbell'], ['Leg Press', 'Quads', 'Machine'],
+  ['Hack Squat', 'Quads', 'Machine'], ['Bulgarian Split Squat', 'Quads', 'Dumbbell'],
+  ['Walking Lunge', 'Quads', 'Dumbbell'], ['Leg Extension', 'Quads', 'Machine'], ['Goblet Squat', 'Quads', 'Dumbbell'],
+  ['Romanian Deadlift', 'Hamstrings', 'Barbell'], ['Lying Leg Curl', 'Hamstrings', 'Machine'],
+  ['Seated Leg Curl', 'Hamstrings', 'Machine'], ['Hip Thrust', 'Glutes', 'Barbell'],
+  ['Cable Kickback', 'Glutes', 'Cable'], ['Hip Abduction', 'Glutes', 'Machine'],
+  ['Standing Calf Raise', 'Calves', 'Machine'], ['Seated Calf Raise', 'Calves', 'Machine'],
+  ['Plank', 'Core', 'Bodyweight', 'time'], ['Side Plank', 'Core', 'Bodyweight', 'time'],
+  ['Hanging Leg Raise', 'Core', 'Bodyweight', 'bodyweight_reps'], ['Cable Crunch', 'Core', 'Cable'],
+  ['Ab Wheel Rollout', 'Core', 'Bodyweight', 'bodyweight_reps'], ['Russian Twist', 'Core', 'Bodyweight', 'bodyweight_reps'],
+  ['Kettlebell Swing', 'Full body', 'Kettlebell'], ["Farmer's Carry", 'Full body', 'Dumbbell', 'time'],
+  ['Burpee', 'Full body', 'Bodyweight', 'bodyweight_reps'],
+];
+const SEED_CARDIO = [
+  ['Treadmill', 'Machine'], ['Outdoor Run', 'Other'], ['Stationary Bike', 'Machine'], ['Outdoor Cycling', 'Other'],
+  ['Rowing Machine', 'Machine'], ['Elliptical', 'Machine'], ['Stair Climber', 'Machine'], ['Incline Walk', 'Machine'],
+  ['Jump Rope', 'Other'], ['Swimming', 'Other'], ['SkiErg', 'Machine'], ['Assault Bike', 'Machine'],
+];
+const MUSCLES = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core', 'Full body', 'Cardio'];
+const EQUIPMENT = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight', 'Kettlebell', 'Band', 'Other'];
+const TRACKING_TYPES = [
+  { id: 'weight_reps', label: 'Weight × reps', hint: 'Bench press, curls, machines' },
+  { id: 'bodyweight_reps', label: 'Bodyweight reps', hint: 'Pull-ups, dips (optional added weight)' },
+  { id: 'time', label: 'Timed hold', hint: 'Plank, carries' },
+  { id: 'cardio', label: 'Cardio', hint: 'Duration, distance, calories' },
+];
+
+function slugId(name) {
+  return 'ex_' + name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
+function defaultSettings() {
+  return {
+    unit: 'kg',
+    defaultRestS: 90,
+    supersetRestS: 0, // rest between exercises inside a superset round
+    restSound: true,
+    keepAwake: true,
+    hintInstallSeen: false,
+  };
+}
+
+function emptyState() {
+  return { schema: SCHEMA, exercises: [], templates: [], workouts: [], settings: defaultSettings(), restTimer: null, savedAt: 0 };
+}
+
+/** Adds any built-in exercise that is missing (by id). Safe to run on every boot. */
+function seedExercises(S) {
+  const have = new Set(S.exercises.map((e) => e.id));
+  let added = 0;
+  const add = (name, category, muscle, equipment, tracking) => {
+    const id = slugId(name);
+    if (have.has(id)) return;
+    S.exercises.push({ id, name, category, muscle, equipment, tracking, custom: false, hidden: false, createdAt: 0 });
+    have.add(id);
+    added++;
+  };
+  for (const [n, m, e, t] of SEED_STRENGTH) add(n, 'strength', m, e, t || 'weight_reps');
+  for (const [n, e] of SEED_CARDIO) add(n, 'cardio', 'Cardio', e, 'cardio');
+  return added;
+}
+
+/** Fill in anything missing after loading an older/partial state. */
+function normalizeState(raw) {
+  const S = Object.assign(emptyState(), raw || {});
+  S.settings = Object.assign(defaultSettings(), (raw && raw.settings) || {});
+  for (const k of ['exercises', 'templates', 'workouts']) if (!Array.isArray(S[k])) S[k] = [];
+  seedExercises(S);
+  return S;
+}
+
+// ---------- lookups ----------
+const exById = (S, id) => S.exercises.find((e) => e.id === id) || null;
+const workoutById = (S, id) => S.workouts.find((w) => w.id === id) || null;
+const templateById = (S, id) => S.templates.find((t) => t.id === id) || null;
+const activeWorkout = (S) => S.workouts.find((w) => !w.finishedAt) || null;
+const finishedWorkouts = (S) => S.workouts.filter((w) => w.finishedAt).sort((a, b) => b.startedAt - a.startedAt);
+function findSet(w, setId) {
+  for (const item of w.items) {
+    const set = item.sets.find((s) => s.id === setId);
+    if (set) return { item, set };
+  }
+  return null;
+}
+
+// ---------- exercises ----------
+/** Library entries with usage info, sorted by name. */
+function listExercises(S, { includeHidden = false } = {}) {
+  const usage = new Map();
+  for (const w of S.workouts) {
+    if (!w.finishedAt) continue;
+    for (const it of w.items) {
+      const u = usage.get(it.exerciseId) || { last: 0, count: 0 };
+      u.count++;
+      u.last = Math.max(u.last, w.startedAt);
+      usage.set(it.exerciseId, u);
+    }
+  }
+  return S.exercises
+    .filter((e) => includeHidden || !e.hidden)
+    .map((e) => ({ ...e, lastUsed: usage.get(e.id)?.last || null, timesUsed: usage.get(e.id)?.count || 0 }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+function guessExercise(name) {
+  const n = name.toLowerCase();
+  if (['run', 'bike', 'cycl', 'rowing', 'elliptical', 'stair', 'walk', 'swim', 'treadmill', 'cardio', 'rope', 'erg'].some((w) => n.includes(w))) {
+    return { name, category: 'cardio', muscle: 'Cardio', equipment: 'Machine', tracking: 'cardio' };
+  }
+  if (n.includes('plank') || n.includes('hold') || n.includes('hang')) {
+    return { name, category: 'strength', muscle: 'Core', equipment: 'Bodyweight', tracking: 'time' };
+  }
+  return { name, category: 'strength', muscle: '', equipment: 'Other', tracking: 'weight_reps' };
+}
+/** Creates a custom exercise, or returns the existing one with the same name. */
+function createExercise(S, ex) {
+  const name = ex.name.trim();
+  const existing = S.exercises.find((e) => e.name.toLowerCase() === name.toLowerCase() && !e.hidden);
+  if (existing) return existing.id;
+  const id = newId();
+  S.exercises.push({
+    id, name, category: ex.tracking === 'cardio' ? 'cardio' : 'strength', muscle: ex.muscle || '',
+    equipment: ex.equipment || '', tracking: ex.tracking || 'weight_reps', custom: true, hidden: false, createdAt: Date.now(),
+  });
+  return id;
+}
+
+// ---------- history queries ----------
+/** Done sets of the latest finished session (started before `beforeTs`) containing the exercise. */
+function previousSets(S, exerciseId, excludeWorkoutId = null, beforeTs = Infinity) {
+  let best = null;
+  for (const w of S.workouts) {
+    if (!w.finishedAt || w.id === excludeWorkoutId || w.startedAt >= beforeTs) continue;
+    if (best && w.startedAt <= best.w.startedAt) continue;
+    const item = w.items.find((it) => it.exerciseId === exerciseId && it.sets.some((s) => s.done));
+    if (item) best = { w, item };
+  }
+  return best ? best.item.sets.filter((s) => s.done).map(pickValues) : [];
+}
+function pickValues(s) {
+  return { kind: s.kind, weightKg: s.weightKg, reps: s.reps, durationS: s.durationS, distanceM: s.distanceM, calories: s.calories };
+}
+/** Finished sessions for an exercise, newest first: [{workoutId, name, startedAt, sets}]. */
+function exerciseHistory(S, exerciseId) {
+  const out = [];
+  for (const w of finishedWorkouts(S)) {
+    const sets = w.items.filter((it) => it.exerciseId === exerciseId).flatMap((it) => it.sets.filter((s) => s.done).map(pickValues));
+    if (sets.length) out.push({ workoutId: w.id, name: w.name, startedAt: w.startedAt, sets });
+  }
+  return out;
+}
+/** Records set in a workout vs everything before it: [{exerciseName, type, value, previous}]. */
+function workoutRecords(S, workoutId) {
+  const w = workoutById(S, workoutId);
+  if (!w) return [];
+  const out = [];
+  const seen = new Set();
+  for (const it of w.items) {
+    if (seen.has(it.exerciseId)) continue;
+    seen.add(it.exerciseId);
+    const ex = exById(S, it.exerciseId);
+    if (!ex) continue;
+    const current = w.items.filter((x) => x.exerciseId === it.exerciseId).flatMap((x) => x.sets.filter((s) => s.done));
+    const history = exerciseHistory(S, it.exerciseId).filter((h) => h.startedAt < w.startedAt).map((h) => h.sets);
+    for (const hit of detectRecords(ex.tracking, current, history)) out.push({ ...hit, exerciseName: ex.name });
+  }
+  return out;
+}
+/** Totals of completed sets. */
+function workoutStats(S, w) {
+  let sets = 0, undone = 0, volumeKg = 0, cardioS = 0;
+  for (const it of w.items) {
+    const ex = exById(S, it.exerciseId);
+    for (const s of it.sets) {
+      if (!s.done) { undone++; continue; }
+      sets++;
+      if (s.kind !== 'warmup') volumeKg += setVolume(s);
+      if (ex && ex.tracking === 'cardio') cardioS += s.durationS || 0;
+    }
+  }
+  const durationS = ((w.finishedAt || Date.now()) - w.startedAt) / 1000;
+  return { sets, undone, volumeKg, cardioS, durationS };
+}
+function countWorkoutsSince(S, ts) {
+  return S.workouts.filter((w) => w.finishedAt && w.startedAt >= ts).length;
+}
+
+// ---------- workouts ----------
+function makeSet(v) {
+  return {
+    id: newId(), kind: v.kind || 'working', weightKg: v.weightKg ?? null, reps: v.reps ?? null,
+    durationS: v.durationS ?? null, distanceM: v.distanceM ?? null, calories: v.calories ?? null, done: false, doneAt: null,
+  };
+}
+/** New workout item for an exercise, sets pre-filled from last session / template target. */
+function makeWorkoutItem(S, exerciseId, superset, target, excludeWorkoutId) {
+  const ex = exById(S, exerciseId);
+  const previous = previousSets(S, exerciseId, excludeWorkoutId);
+  const count = initialSetCount(ex ? ex.tracking : 'weight_reps', target, previous);
+  const sets = [];
+  for (let i = 0; i < count; i++) sets.push(makeSet(prefillSet(i, previous, target)));
+  return { id: newId(), exerciseId, superset: superset || null, restS: target?.restS ?? null, notes: null, sets };
+}
+function startWorkout(S, { templateId = null, name = null } = {}) {
+  const now = Date.now();
+  const t = templateId ? templateById(S, templateId) : null;
+  const w = { id: newId(), templateId: t ? t.id : null, name: name || (t ? t.name : defaultWorkoutName(now)), startedAt: now, finishedAt: null, notes: null, items: [] };
+  if (t) for (const ti of t.items) if (exById(S, ti.exerciseId)) w.items.push(makeWorkoutItem(S, ti.exerciseId, ti.superset, ti, w.id));
+  S.workouts.push(w);
+  return w.id;
+}
+/** Same exercises and structure as a past workout; values pre-filled from history. */
+function repeatWorkout(S, pastId) {
+  const past = workoutById(S, pastId);
+  if (!past) return null;
+  const w = { id: newId(), templateId: past.templateId, name: past.name, startedAt: Date.now(), finishedAt: null, notes: null, items: [] };
+  for (const it of past.items) {
+    const done = it.sets.filter((s) => s.done).length || it.sets.length;
+    w.items.push(makeWorkoutItem(S, it.exerciseId, it.superset, { sets: done, restS: it.restS }, w.id));
+  }
+  S.workouts.push(w);
+  return w.id;
+}
+function addExercisesToWorkout(S, workoutId, exerciseIds, asSuperset) {
+  const w = workoutById(S, workoutId);
+  if (!w) return;
+  const group = asSuperset && exerciseIds.length > 1 ? newId() : null;
+  for (const id of exerciseIds) if (exById(S, id)) w.items.push(makeWorkoutItem(S, id, group, null, w.id));
+}
+/** Appends a set copying the last one's values. */
+function addSet(item) {
+  const last = item.sets[item.sets.length - 1];
+  item.sets.push(makeSet(last ? { ...pickValues(last), kind: last.kind === 'warmup' ? 'working' : last.kind, calories: null } : {}));
+}
+/**
+ * Tick a set. Empty fields are filled from last session's matching set; values
+ * carry forward into later empty, unticked sets. Returns {ok, reason}.
+ */
+function completeSet(S, w, item, set) {
+  const ex = exById(S, item.exerciseId);
+  const tracking = ex ? ex.tracking : 'weight_reps';
+  const idx = item.sets.indexOf(set);
+  const prevAll = previousSets(S, item.exerciseId, w.id, w.startedAt);
+  const prev = prevAll[idx] || prevAll[prevAll.length - 1];
+  const fields = fieldsFor(tracking);
+  const merged = { ...set };
+  for (const f of fields) if (merged[f.key] == null && prev && prev[f.key] != null) merged[f.key] = prev[f.key];
+  if (!isLoggable(tracking, merged)) return { ok: false, tracking };
+  Object.assign(set, merged, { done: true, doneAt: Date.now() });
+  for (const later of item.sets.slice(idx + 1)) {
+    if (later.done) continue;
+    for (const f of fields) if (f.key !== 'calories' && later[f.key] == null && set[f.key] != null) later[f.key] = set[f.key];
+  }
+  return { ok: true, tracking };
+}
+/** Drops unticked sets and empty exercises, then marks the workout finished. */
+function finishWorkout(S, workoutId) {
+  const w = workoutById(S, workoutId);
+  if (!w) return;
+  for (const it of w.items) it.sets = it.sets.filter((s) => s.done);
+  w.items = w.items.filter((it) => it.sets.length);
+  normalizeItems(w.items);
+  w.finishedAt = Date.now();
+}
+function deleteWorkout(S, workoutId) {
+  S.workouts = S.workouts.filter((w) => w.id !== workoutId);
+}
+
+// ---------- ordered item lists (template items and workout items) ----------
+function normalizeItems(items) {
+  const keys = normalizeKeys(items.map((i) => i.superset));
+  items.forEach((it, i) => (it.superset = keys[i]));
+}
+/** Moving an item takes it out of its superset; the rest of the group stays linked. */
+function moveItem(items, id, delta) {
+  const i = items.findIndex((x) => x.id === id);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= items.length) return;
+  items[i].superset = null;
+  [items[i], items[j]] = [items[j], items[i]];
+  normalizeItems(items);
+}
+function removeItem(items, id) {
+  const i = items.findIndex((x) => x.id === id);
+  if (i >= 0) items.splice(i, 1);
+  normalizeItems(items);
+}
+function toggleSupersetItem(items, id) {
+  const i = items.findIndex((x) => x.id === id);
+  if (i < 0) return;
+  const keys = toggleLinkWithNext(items.map((x) => x.superset), i);
+  items.forEach((it, k) => (it.superset = keys[k]));
+}
+
+// ---------- templates ----------
+function createTemplate(S, name) {
+  const now = Date.now();
+  const t = { id: newId(), name: name.trim() || 'New template', notes: null, createdAt: now, updatedAt: now, items: [] };
+  S.templates.push(t);
+  return t.id;
+}
+function makeTemplateItem(ex, superset) {
+  const cardio = ex.tracking === 'cardio';
+  const timed = ex.tracking === 'time';
+  return {
+    id: newId(), exerciseId: ex.id, superset: superset || null, sets: cardio ? 1 : 3,
+    repMin: cardio || timed ? null : 8, repMax: cardio || timed ? null : 12, weightKg: null,
+    durationS: cardio ? 20 * 60 : timed ? 60 : null, distanceM: null, restS: null, notes: null,
+  };
+}
+function addExercisesToTemplate(S, templateId, exerciseIds, asSuperset) {
+  const t = templateById(S, templateId);
+  if (!t) return;
+  const group = asSuperset && exerciseIds.length > 1 ? newId() : null;
+  for (const id of exerciseIds) {
+    const ex = exById(S, id);
+    if (ex) t.items.push(makeTemplateItem(ex, group));
+  }
+  t.updatedAt = Date.now();
+}
+function duplicateTemplate(S, templateId) {
+  const t = templateById(S, templateId);
+  if (!t) return null;
+  const copy = JSON.parse(JSON.stringify(t));
+  copy.id = newId();
+  copy.name = `${t.name} (copy)`;
+  copy.createdAt = copy.updatedAt = Date.now();
+  copy.items.forEach((it) => (it.id = newId()));
+  S.templates.push(copy);
+  return copy.id;
+}
+function deleteTemplate(S, templateId) {
+  S.templates = S.templates.filter((t) => t.id !== templateId);
+}
+function listTemplates(S) {
+  const last = new Map();
+  for (const w of S.workouts) if (w.finishedAt && w.templateId) last.set(w.templateId, Math.max(last.get(w.templateId) || 0, w.startedAt));
+  return S.templates
+    .map((t) => ({ ...t, lastDone: last.get(t.id) || null }))
+    .sort((a, b) => (b.lastDone || b.updatedAt) - (a.lastDone || a.updatedAt));
+}
+/** Template from a finished workout's structure: set count, rep range and top weight. */
+function saveWorkoutAsTemplate(S, workoutId) {
+  const w = workoutById(S, workoutId);
+  if (!w) return null;
+  const now = Date.now();
+  const t = { id: newId(), name: w.name, notes: null, createdAt: now, updatedAt: now, items: [] };
+  for (const it of w.items) {
+    const done = it.sets.filter((s) => s.done && s.kind !== 'warmup');
+    const nums = (k) => done.map((s) => s[k]).filter((v) => v != null);
+    const reps = nums('reps'), weights = nums('weightKg'), durs = nums('durationS'), dists = nums('distanceM');
+    t.items.push({
+      id: newId(), exerciseId: it.exerciseId, superset: it.superset, sets: Math.max(1, done.length),
+      repMin: reps.length ? Math.min(...reps) : null, repMax: reps.length ? Math.max(...reps) : null,
+      weightKg: weights.length ? Math.max(...weights) : null, durationS: durs.length ? Math.max(...durs) : null,
+      distanceM: dists.length ? Math.max(...dists) : null, restS: it.restS, notes: null,
+    });
+  }
+  S.templates.push(t);
+  return t.id;
+}
+
+// ---------- backup ----------
+const BACKUP_FORMAT = 'knur-simulator-backup';
+function makeBackup(S) {
+  return {
+    format: BACKUP_FORMAT, app: APP.name, version: APP.version, schema: SCHEMA, exportedAt: new Date().toISOString(),
+    data: { exercises: S.exercises, templates: S.templates, workouts: S.workouts, settings: S.settings },
+  };
+}
+/** Validates a parsed backup and returns a fresh state. Throws a readable Error. */
+function stateFromBackup(obj) {
+  if (!obj || typeof obj !== 'object' || obj.format !== BACKUP_FORMAT) throw new Error('This file is not a Knur Simulator backup.');
+  if (typeof obj.schema !== 'number') throw new Error('The backup has no schema version.');
+  if (obj.schema > SCHEMA) throw new Error('This backup was made by a newer version of the app. Update the app first.');
+  const d = obj.data || {};
+  for (const k of ['exercises', 'templates', 'workouts']) {
+    if (d[k] !== undefined && !Array.isArray(d[k])) throw new Error(`The backup's ${k} list is damaged.`);
+  }
+  return normalizeState({ exercises: d.exercises || [], templates: d.templates || [], workouts: d.workouts || [], settings: d.settings || {} });
+}
+function backupFileName(now = new Date()) {
+  return `knur-simulator-backup-${now.toISOString().slice(0, 10)}.json`;
+}
+function stateCounts(S) {
+  return { workouts: S.workouts.filter((w) => w.finishedAt).length, templates: S.templates.length, custom: S.exercises.filter((e) => e.custom).length };
+}
+
+Object.assign(KS, {
+  SCHEMA, MUSCLES, EQUIPMENT, TRACKING_TYPES, slugId, emptyState, normalizeState, seedExercises, exById, workoutById,
+  templateById, activeWorkout, finishedWorkouts, findSet, listExercises, guessExercise, createExercise, previousSets,
+  exerciseHistory, workoutRecords, workoutStats, countWorkoutsSince, startWorkout, repeatWorkout, addExercisesToWorkout,
+  addSet, completeSet, finishWorkout, deleteWorkout, moveItem, removeItem, toggleSupersetItem, normalizeItems,
+  createTemplate, addExercisesToTemplate, duplicateTemplate, deleteTemplate, listTemplates, saveWorkoutAsTemplate,
+  makeBackup, stateFromBackup, backupFileName, stateCounts,
+});
+
+/* ---- 02d_store.js ---- */
+/* ==========================================================================
+   02d_store — persistence. IndexedDB is primary; localStorage keeps a mirror
+   when it fits. On boot the newer copy (by savedAt) wins.
+
+   NEVER RENAME: DB_NAME 'knur', LS_KEY 'knur.v1'. Changing either orphans
+   every workout already saved on the phone.
+   ========================================================================== */
+const DB_NAME = 'knur'; // do not rename
+const LS_KEY = 'knur.v1'; // do not rename
+const IDB_STORE = 'kv';
+
+/** The one live state object (set at boot). */
+var S = null; // eslint-disable-line no-var
+
+const Store = {
+  _db: null,
+  _timer: null,
+  _pending: null,
+  lastError: null,
+
+  open() {
+    if (this._db) return Promise.resolve(this._db);
+    if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+    return new Promise((resolve) => {
+      let req;
+      try {
+        req = indexedDB.open(DB_NAME, 1);
+      } catch (e) {
+        resolve(null);
+        return;
+      }
+      req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+      req.onsuccess = () => {
+        this._db = req.result;
+        resolve(this._db);
+      };
+      req.onerror = () => resolve(null);
+      req.onblocked = () => resolve(null);
+    });
+  },
+  async idbGet(key) {
+    const db = await this.open();
+    if (!db) return undefined;
+    return new Promise((resolve) => {
+      try {
+        const r = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => resolve(undefined);
+      } catch (e) {
+        resolve(undefined);
+      }
+    });
+  },
+  async idbSet(key, value) {
+    const db = await this.open();
+    if (!db) return false;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(value, key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+        tx.onabort = () => resolve(false);
+      } catch (e) {
+        resolve(false);
+      }
+    });
+  },
+
+  /** Newest of the IndexedDB copy and the localStorage mirror, normalised. */
+  async load() {
+    let fromIdb = null;
+    let fromLs = null;
+    try {
+      const raw = await this.idbGet('state');
+      if (raw) fromIdb = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch (e) { /* ignore */ }
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) fromLs = JSON.parse(raw);
+    } catch (e) { /* ignore */ }
+    const pick = !fromIdb ? fromLs : !fromLs ? fromIdb : (fromLs.savedAt || 0) > (fromIdb.savedAt || 0) ? fromLs : fromIdb;
+    return { state: normalizeState(pick), fresh: !pick };
+  },
+
+  /** Debounced save of the global state. */
+  save() {
+    clearTimeout(this._timer);
+    this._timer = setTimeout(() => this.flush(), 250);
+  },
+  async flush() {
+    clearTimeout(this._timer);
+    if (!S) return false;
+    S.savedAt = Date.now();
+    const json = JSON.stringify(S);
+    const ok = await this.idbSet('state', json);
+    let lsOk = false;
+    try {
+      localStorage.setItem(LS_KEY, json);
+      lsOk = true;
+    } catch (e) {
+      // Quota: large histories may not fit in localStorage. IndexedDB still has it.
+      try { localStorage.removeItem(LS_KEY); } catch (e2) { /* ignore */ }
+    }
+    this.lastError = ok || lsOk ? null : 'Could not save to this device.';
+    return ok || lsOk;
+  },
+
+  /** One restore point, overwritten each time (taken before restore / erase). */
+  async snapshot(reason) {
+    const point = { at: Date.now(), reason, counts: stateCounts(S), state: JSON.stringify(S) };
+    return this.idbSet('restorepoint', point);
+  },
+  async restorePoint() {
+    const p = await this.idbGet('restorepoint');
+    return p && p.state ? p : null;
+  },
+
+  async persist() {
+    try {
+      if (navigator.storage && navigator.storage.persist) return await navigator.storage.persist();
+    } catch (e) { /* ignore */ }
+    return false;
+  },
+};
+KS.Store = Store;
+
+/* ---- 03_shell.js ---- */
+/* ==========================================================================
+   03_shell — icons, router, rendering, event delegation, overlays (sheet,
+   action menu, confirm, prompt), toast, screen wake lock, beep.
+   ========================================================================== */
+const $ = (sel, el = document) => el.querySelector(sel);
+const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
+
+// ---------- icons (24px stroke) ----------
+const ICON_PATHS = {
+  today: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  templates: '<rect x="4" y="8" width="16" height="12" rx="2"/><path d="M7 4h10M6 6h12"/>',
+  history: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  settings: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  minus: '<path d="M5 12h14"/>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  back: '<path d="m15 18-6-6 6-6"/>',
+  chev: '<path d="m9 18 6-6-6-6"/>',
+  more: '<circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="19" cy="12" r="1.3" fill="currentColor"/>',
+  play: '<path d="M8 5v14l11-7z" fill="currentColor"/>',
+  trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/>',
+  barbell: '<path d="M2 12h20M6 7v10M3 9v6M18 7v10M21 9v6"/>',
+  pulse: '<path d="M3 12h4l3-7 4 14 3-7h4"/>',
+  timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  share: '<path d="M12 3v12M8 7l4-4 4 4M5 13v6h14v-6"/>',
+  download: '<path d="M12 3v12M8 11l4 4 4-4M5 19h14"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  unit: '<path d="M6 20h12l-2-11H8zM12 9V6M9.5 4h5"/>',
+  bell: '<path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4zM10 21h4"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h0"/>',
+  phone: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
+  up: '<path d="m6 15 6-6 6 6"/>',
+  down: '<path d="m6 9 6 6 6-6"/>',
+};
+function icon(name, cls = '') {
+  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name] || ''}</svg>`;
+}
+const SS_COLORS = ['#CFFF4A', '#5AC8FA', '#FF9F0A', '#BF5AF2', '#FF6482'];
+
+// ---------- state helpers ----------
+/** Call after mutating S: persists (debounced) and re-renders in place. */
+function commit(opts = {}) {
+  Store.save();
+  if (opts.render !== false) rerender();
+}
+const unit = () => S.settings.unit;
+
+// ---------- router ----------
+const VIEWS = {};
+const A = {}; // click actions:  data-a="name"
+const I = {}; // input handlers: data-i="name"
+const C = {}; // change handlers: data-c="name"
+const BL = {}; // blur handlers: data-b="name"
+
+function parseRoute() {
+  const h = (location.hash || '').replace(/^#\/?/, '');
+  const [name = 'today', id = null, extra = null] = h.split('/').filter(Boolean);
+  return { name: VIEWS[name] ? name : 'today', id: id ? decodeURIComponent(id) : null, extra };
+}
+function go(path, { replace = false } = {}) {
+  const target = '#/' + path;
+  if (replace) {
+    history.replaceState(null, '', target);
+    render();
+  } else if (location.hash === target) {
+    render();
+  } else {
+    location.hash = target;
+  }
+}
+/** Back within the app, falling back to a tab when there is no history (fresh launch). */
+function goBack(fallback = 'today') {
+  if (history.length > 1 && ui.navDepth > 0) history.back();
+  else go(fallback, { replace: true });
+}
+
+const ui = { navDepth: 0, route: null, lastKey: '' };
+
+function tabsHtml(active) {
+  const tabs = [['today', 'Today'], ['templates', 'Templates'], ['history', 'History'], ['settings', 'Settings']];
+  return tabs.map(([k, label]) => `<a href="#/${k}" class="${active === k ? 'on' : ''}" data-tab="${k}">${icon(k)}<span>${label}</span></a>`).join('');
+}
+
+function render({ keepScroll = false } = {}) {
+  if (!S) return;
+  const r = parseRoute();
+  const key = `${r.name}/${r.id || ''}/${r.extra || ''}`;
+  const sameRoute = key === ui.lastKey;
+  const y = window.scrollY;
+  ui.route = r;
+  let v;
+  try {
+    v = VIEWS[r.name](r);
+  } catch (e) {
+    console.error(e);
+    v = { title: 'Something went wrong', body: `<div class="empty"><h3>Something went wrong</h3><p>${esc(e.message)}</p></div>`, tab: 'today' };
+  }
+  if (v.redirect) {
+    go(v.redirect, { replace: true });
+    return;
+  }
+  const top = $('#top');
+  top.className = v.large ? 'large' : '';
+  top.innerHTML = `<div class="t-side left">${v.left || ''}</div><div class="t-title">${v.titleHtml || esc(v.title || '')}</div><div class="t-side right">${v.right || ''}</div>`;
+  $('#view').innerHTML = v.body;
+  $('#tabs').innerHTML = tabsHtml(v.tab);
+  document.body.classList.toggle('no-tabs', !!v.noTabs);
+  document.title = v.title && v.title !== APP.name ? `${v.title} · ${APP.short}` : APP.name;
+  if (keepScroll && sameRoute) window.scrollTo(0, y);
+  else if (!sameRoute) window.scrollTo(0, 0);
+  ui.lastKey = key;
+  if (v.mount) v.mount();
+  Wake.update();
+  Rest.paint();
+}
+const rerender = () => render({ keepScroll: true });
+
+window.addEventListener('hashchange', () => {
+  ui.navDepth++;
+  render();
+});
+
+// ---------- event delegation ----------
+document.addEventListener('click', (ev) => {
+  Beep.unlock();
+  const el = ev.target.closest('[data-a]');
+  if (!el) return;
+  const fn = A[el.dataset.a];
+  if (!fn) return;
+  ev.preventDefault();
+  fn(el.dataset, el, ev);
+});
+document.addEventListener('input', (ev) => {
+  const el = ev.target.closest('[data-i]');
+  if (el && I[el.dataset.i]) I[el.dataset.i](el.dataset, el, ev);
+});
+document.addEventListener('change', (ev) => {
+  const el = ev.target.closest('[data-c]');
+  if (el && C[el.dataset.c]) C[el.dataset.c](el.dataset, el, ev);
+});
+document.addEventListener('focusout', (ev) => {
+  const el = ev.target.closest('[data-b]');
+  if (el && BL[el.dataset.b]) BL[el.dataset.b](el.dataset, el, ev);
+});
+document.addEventListener('keydown', (ev) => {
+  // Enter in a single-line field closes the keyboard, like a native "Done".
+  if (ev.key === 'Enter' && ev.target.matches('input:not([type=file])')) ev.target.blur();
+  if (ev.key === 'Escape' && Layer.stack.length) Layer.close();
+});
+
+// ---------- overlays ----------
+const Layer = {
+  stack: [],
+  push(el, { onClose, dismissable = true } = {}) {
+    const scrim = document.createElement('div');
+    scrim.className = 'scrim';
+    const wrap = document.createElement('div');
+    wrap.appendChild(scrim);
+    wrap.appendChild(el);
+    if (dismissable) scrim.addEventListener('click', () => this.close());
+    $('#layer').appendChild(wrap);
+    this.stack.push({ wrap, onClose });
+    document.body.style.overflow = 'hidden';
+    return el;
+  },
+  close(result) {
+    const top = this.stack.pop();
+    if (!top) return;
+    top.wrap.remove();
+    if (!this.stack.length) document.body.style.overflow = '';
+    if (top.onClose) top.onClose(result);
+  },
+  closeAll() {
+    while (this.stack.length) this.close();
+  },
+};
+A.closeLayer = () => Layer.close();
+
+/** Bottom sheet. Returns the sheet element; `body` can be re-rendered via el.querySelector('.sheet-body'). */
+function openSheet({ title, body, foot = '', full = false, left = '', right = '', onClose }) {
+  const el = document.createElement('div');
+  el.className = 'sheet' + (full ? ' full' : '');
+  el.innerHTML = `<div class="sheet-head"><div style="min-width:64px">${left || `<button class="link" data-a="closeLayer">Close</button>`}</div><h2>${esc(title)}</h2><div style="min-width:64px;text-align:right">${right}</div></div>
+    <div class="sheet-body">${body}</div>${foot ? `<div class="sheet-foot">${foot}</div>` : ''}`;
+  return Layer.push(el, { onClose });
+}
+
+/** Action sheet. options: [{label, fn, destructive}] */
+function menu(title, options) {
+  const el = document.createElement('div');
+  el.className = 'sheet';
+  el.innerHTML = `<div class="menu">${title ? `<h3>${esc(title)}</h3>` : ''}${options
+    .map((o, i) => `<button data-mi="${i}" class="${o.destructive ? 'destructive' : ''}">${esc(o.label)}</button>`)
+    .join('')}<button class="cancel" data-mi="-1">Cancel</button></div>`;
+  el.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-mi]');
+    if (!b) return;
+    ev.stopPropagation();
+    const i = Number(b.dataset.mi);
+    Layer.close();
+    if (i >= 0) options[i].fn();
+  });
+  Layer.push(el);
+}
+
+function dialog({ title, msg = '', ok = 'OK', cancel = 'Cancel', destructive = false, input = null }) {
+  return new Promise((resolve) => {
+    const el = document.createElement('div');
+    el.className = 'dialog';
+    el.setAttribute('role', 'dialog');
+    el.innerHTML = `<div class="d-body"><h3>${esc(title)}</h3>${msg ? `<p>${esc(msg)}</p>` : ''}${
+      input ? `<input class="field" id="dlg-in" value="${esc(input.value || '')}" placeholder="${esc(input.placeholder || '')}" autocomplete="off">` : ''
+    }</div><div class="d-btns">${cancel ? `<button data-d="0">${esc(cancel)}</button>` : ''}<button data-d="1" class="${destructive ? 'destructive' : ''}">${esc(ok)}</button></div>`;
+    let done = false;
+    const finish = (v) => {
+      if (done) return;
+      done = true;
+      Layer.close();
+      resolve(v);
+    };
+    el.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-d]');
+      if (!b) return;
+      ev.stopPropagation();
+      if (b.dataset.d === '1') finish(input ? $('#dlg-in', el).value : true);
+      else finish(input ? null : false);
+    });
+    Layer.push(el, { onClose: () => { if (!done) { done = true; resolve(input ? null : false); } } });
+    if (input) {
+      const f = $('#dlg-in', el);
+      f.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); finish(f.value); } });
+      setTimeout(() => { f.focus(); f.select(); }, 50);
+    }
+  });
+}
+const confirmDlg = (title, msg, ok = 'OK', destructive = false) => dialog({ title, msg, ok, destructive });
+const alertDlg = (title, msg) => dialog({ title, msg, ok: 'OK', cancel: null });
+const promptDlg = (title, value = '', placeholder = '') => dialog({ title, ok: 'Save', input: { value, placeholder } });
+
+let _toastTimer = null;
+function toast(msg, ms = 2400) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// ---------- screen wake lock (keeps the phone awake during a workout) ----------
+const Wake = {
+  lock: null,
+  want: false,
+  async update() {
+    const want = !!(S && S.settings.keepAwake && ui.route && ui.route.name === 'active' && activeWorkout(S));
+    this.want = want;
+    if (!('wakeLock' in navigator)) return;
+    try {
+      if (want && !this.lock && document.visibilityState === 'visible') {
+        this.lock = await navigator.wakeLock.request('screen');
+        this.lock.addEventListener('release', () => (this.lock = null));
+      } else if (!want && this.lock) {
+        await this.lock.release();
+        this.lock = null;
+      }
+    } catch (e) {
+      this.lock = null; // not allowed (low battery, unsupported) — harmless
+    }
+  },
+};
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    Wake.lock = null;
+    Wake.update();
+    Rest.tick();
+  } else {
+    Store.flush();
+  }
+});
+window.addEventListener('pagehide', () => Store.flush());
+
+// ---------- beep (Web Audio; iOS needs a tap first to allow sound) ----------
+const Beep = {
+  ctx: null,
+  unlock() {
+    if (this.ctx) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      this.ctx = new AC();
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      g.gain.value = 0;
+      o.connect(g).connect(this.ctx.destination);
+      o.start();
+      o.stop(this.ctx.currentTime + 0.01);
+    } catch (e) {
+      this.ctx = null;
+    }
+  },
+  play() {
+    if (!this.ctx) return;
+    try {
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      const t0 = this.ctx.currentTime;
+      [0, 0.22, 0.44].forEach((d, i) => {
+        const o = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        o.frequency.value = i === 2 ? 1320 : 880;
+        g.gain.setValueAtTime(0.0001, t0 + d);
+        g.gain.exponentialRampToValueAtTime(0.35, t0 + d + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.18);
+        o.connect(g).connect(this.ctx.destination);
+        o.start(t0 + d);
+        o.stop(t0 + d + 0.2);
+      });
+    } catch (e) { /* ignore */ }
+  },
+};
+document.addEventListener('touchstart', () => Beep.unlock(), { passive: true, once: true });
+
+const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// ---------- small shared view helpers ----------
+const backBtn = (fallback) => `<button class="back" data-a="back" data-fallback="${fallback}">${icon('back')}</button>`;
+A.back = (d) => goBack(d.fallback || 'today');
+A.go = (d) => go(d.to);
+function emptyBox(ic, title, body = '', action = '') {
+  return `<div class="empty">${icon(ic)}<h3>${esc(title)}</h3>${body ? `<p>${esc(body)}</p>` : ''}${action ? `<div class="mt16">${action}</div>` : ''}</div>`;
+}
+function stat(label, value) {
+  return `<div><div class="stat-v">${esc(value)}</div><div class="stat-l">${esc(label)}</div></div>`;
+}
+function ssBadge(info) {
+  if (!info || !info.label) return '';
+  return `<span class="badge" style="background:${SS_COLORS[info.group % SS_COLORS.length]}">${info.label}</span>`;
+}
+function ssStyle(info) {
+  if (!info || info.group == null) return '';
+  return `border-left-color:${SS_COLORS[info.group % SS_COLORS.length]}`;
+}
+function exAvatar(ex) {
+  const cardio = ex && ex.tracking === 'cardio';
+  return `<div class="avatar ${cardio ? 'cardio' : ''}">${icon(cardio ? 'pulse' : ex && ex.tracking === 'time' ? 'timer' : 'barbell')}</div>`;
+}
+
+/* ---- 04_today.js ---- */
+/* ==========================================================================
+   04_today — Today tab, starting workouts, live elapsed clocks.
+   ========================================================================== */
+
+VIEWS.today = () => {
+  const active = activeWorkout(S);
+  const templates = listTemplates(S).slice(0, 6);
+  const last = finishedWorkouts(S)[0];
+  const week = countWorkoutsSince(S, startOfWeek());
+  const u = unit();
+  let html = `<div class="caps" style="margin-top:-2px">${esc(fmtDate(Date.now()))}</div>`;
+
+  if (!isStandalone() && !S.settings.hintInstallSeen) {
+    html += `<div class="card install mt12"><div class="row"><div class="grow"><div class="bold">Install on your iPhone</div>
+      <div class="small dim mt4">${isIOS() ? 'Tap Share, then “Add to Home Screen”. It then opens full screen and works offline.' : 'Open this page in Safari on your iPhone, tap Share, then “Add to Home Screen”.'}</div></div>
+      <button class="icon-btn" data-a="dismissInstall" aria-label="Dismiss">${icon('x')}</button></div></div>`;
+  }
+
+  if (active) {
+    const st = workoutStats(S, active);
+    html += `<div class="card accent-border mt12"><div class="row between"><div class="grow"><div class="caps">In progress</div>
+      <div class="bold ell" style="font-size:18px">${esc(active.name)}</div><div class="small dim">${plural(st.sets, 'set')} done</div></div>
+      <div class="accent bold tnum" style="font-size:20px" data-elapsed="${active.startedAt}">${fmtClock((Date.now() - active.startedAt) / 1000)}</div></div>
+      <button class="btn primary mt12" data-a="go" data-to="active">${icon('play')} Resume workout</button></div>`;
+  } else {
+    html += `<button class="btn primary mt12" data-a="startEmpty">${icon('plus')} Start empty workout</button>`;
+  }
+
+  html += `<div class="section"><span class="caps">Quick start</span><button class="link" data-a="go" data-to="templates">All templates</button></div>`;
+  if (!templates.length) {
+    html += `<div class="card tap" data-a="go" data-to="templates"><div class="row">${icon('templates', 'faint')}<div class="dim">Create a template to start workouts in one tap.</div></div></div>`;
+  } else {
+    html += `<div class="stack">${templates
+      .map((t) => {
+        const names = t.items.map((i) => exById(S, i.exerciseId)?.name).filter(Boolean).join(', ');
+        return `<div class="card tap" data-a="startTemplate" data-id="${t.id}"><div class="row"><div class="grow">
+          <div class="bold ell" style="font-size:17px">${esc(t.name)}</div><div class="small dim ell">${esc(names || 'No exercises yet')}</div>
+          ${t.lastDone ? `<div class="tiny faint mt4">Last: ${esc(fmtDate(t.lastDone))}</div>` : ''}</div>
+          <span class="accent" style="width:34px;height:34px">${icon('play')}</span></div></div>`;
+      })
+      .join('')}</div>`;
+  }
+
+  html += `<div class="section"><span class="caps">This week</span></div><div class="card"><div class="stats">${stat('workouts', String(week))}`;
+  if (last) {
+    const ls = workoutStats(S, last);
+    html += stat('last session', fmtShortDate(last.startedAt));
+    html += ls.volumeKg > 0 ? stat(`${u} lifted`, fmtInt(toDisplayWeight(ls.volumeKg, u))) : stat('duration', fmtDurShort(ls.durationS));
+  }
+  html += `</div></div>`;
+  html += `<button class="btn mt24" data-a="go" data-to="exercises">${icon('barbell')} Exercise library</button>`;
+  return { title: 'Today', large: true, body: html, tab: 'today' };
+};
+
+A.dismissInstall = () => {
+  S.settings.hintInstallSeen = true;
+  commit();
+};
+
+/** Start a workout, guarding against two running at once. */
+function startFlow(make) {
+  const active = activeWorkout(S);
+  const begin = () => {
+    const id = make();
+    if (!id) return;
+    commit({ render: false });
+    go('active');
+  };
+  if (!active) return begin();
+  menu(`“${active.name}” is still in progress`, [
+    { label: 'Resume it', fn: () => go('active') },
+    {
+      label: 'Discard it and start new',
+      destructive: true,
+      fn: () => {
+        deleteWorkout(S, active.id);
+        Rest.stop();
+        begin();
+      },
+    },
+  ]);
+}
+A.startEmpty = () => startFlow(() => startWorkout(S));
+A.startTemplate = (d) => startFlow(() => startWorkout(S, { templateId: d.id }));
+A.repeatWorkout = (d) => startFlow(() => repeatWorkout(S, d.id));
+
+// Live "elapsed" clocks (any element with data-elapsed="<startedAt>").
+setInterval(() => {
+  for (const el of $$('[data-elapsed]')) el.textContent = fmtClock((Date.now() - Number(el.dataset.elapsed)) / 1000);
+}, 1000);
+
+/* ---- 05_workout.js ---- */
+/* ==========================================================================
+   05_workout — the active workout screen and the rest timer.
+   Typing into a set field updates S immediately (no re-render, so the keyboard
+   stays up); ticking ✓ re-renders. Everything is saved as it happens.
+   ========================================================================== */
+const REST_CHOICES = [30, 45, 60, 90, 120, 150, 180, 240, 300];
+
+// ---------- rest timer (persisted in S.restTimer so it survives reloads) ----------
+const Rest = {
+  _iv: null,
+  start(seconds, label) {
+    if (!seconds || seconds <= 0) return;
+    S.restTimer = { endsAt: Date.now() + seconds * 1000, total: seconds, label };
+    Store.save();
+    this.ensureTicking();
+    this.paint();
+  },
+  adjust(delta) {
+    const t = S.restTimer;
+    if (!t) return;
+    t.endsAt = Math.max(Date.now() + 1000, t.endsAt + delta * 1000);
+    t.total = Math.max(1, t.total + delta);
+    Store.save();
+    this.paint();
+  },
+  stop() {
+    if (!S.restTimer) return;
+    S.restTimer = null;
+    Store.save();
+    this.paint();
+  },
+  ensureTicking() {
+    if (this._iv) return;
+    this._iv = setInterval(() => this.tick(), 250);
+  },
+  tick() {
+    const t = S && S.restTimer;
+    if (!t) {
+      clearInterval(this._iv);
+      this._iv = null;
+      return;
+    }
+    if (Date.now() >= t.endsAt) {
+      const lateBy = Date.now() - t.endsAt;
+      S.restTimer = null;
+      Store.save();
+      this.paint();
+      if (document.visibilityState === 'visible' && lateBy < 5000) {
+        if (S.settings.restSound) Beep.play();
+        const bar = $('#restbar');
+        toast(`Rest over. Next: ${t.label}`, 3000);
+        if (bar) { const tm = $('.time', bar); if (tm) tm.textContent = '0:00'; bar.classList.add('show', 'flash'); setTimeout(() => bar.classList.remove('show', 'flash'), 1600); }
+      }
+      return;
+    }
+    this.paint();
+  },
+  paint() {
+    const bar = $('#restbar');
+    if (!bar) return;
+    const t = S && S.restTimer;
+    const onWorkout = ui.route && ui.route.name === 'active';
+    if (!t || !onWorkout) {
+      if (!bar.classList.contains('flash')) bar.classList.remove('show');
+      return;
+    }
+    const left = Math.max(0, Math.ceil((t.endsAt - Date.now()) / 1000));
+    const pct = Math.min(100, (left / t.total) * 100);
+    if (!bar.firstChild || !bar.dataset.built) {
+      bar.innerHTML = `<div class="prog"></div><div class="row">
+        <button class="adj" data-a="restAdj" data-d="-15">−15</button>
+        <div class="grow" style="text-align:center"><div class="time"></div><div class="tiny dim ell rest-label"></div></div>
+        <button class="adj" data-a="restAdj" data-d="15">+15</button>
+        <button class="adj skip" data-a="restSkip">Skip</button></div>`;
+      bar.dataset.built = '1';
+    }
+    bar.classList.add('show');
+    $('.prog', bar).style.width = pct + '%';
+    $('.time', bar).textContent = fmtClock(left);
+    $('.rest-label', bar).textContent = `Rest · next: ${t.label}`;
+  },
+};
+A.restAdj = (d) => Rest.adjust(Number(d.d));
+A.restSkip = () => Rest.stop();
+
+/** Name of what comes after completing a set of item `idx` (superset-aware). */
+function nextUpLabel(w, idx) {
+  const info = supersetInfo(w.items.map((i) => i.superset));
+  const hasUndone = (i) => w.items[i] && w.items[i].sets.some((s) => !s.done);
+  const name = (i) => exById(S, w.items[i].exerciseId)?.name || 'Next exercise';
+  if (info[idx] && info[idx].label) {
+    let first = idx, last = idx;
+    while (first > 0 && !info[first].isFirst) first--;
+    while (last < w.items.length - 1 && !info[last].isLast) last++;
+    for (let i = first; i <= last; i++) if (hasUndone(i)) return name(i);
+    for (let i = last + 1; i < w.items.length; i++) if (hasUndone(i)) return name(i);
+    return null;
+  }
+  if (hasUndone(idx)) return name(idx);
+  for (let i = idx + 1; i < w.items.length; i++) if (hasUndone(i)) return name(i);
+  return null;
+}
+
+// ---------- view ----------
+function setRowHtml(w, item, ex, s, n, prev) {
+  const u = unit();
+  const fields = fieldsFor(ex.tracking);
+  const badge = s.kind === 'working' ? String(n) : { warmup: 'W', drop: 'D', failure: 'F' }[s.kind];
+  const cells = fields
+    .map((f) => {
+      const pv = prev && prev[f.key] != null ? f.format(prev[f.key], u) : '–';
+      return `<td><input class="num" inputmode="${f.mode === 'numeric' ? 'numeric' : 'decimal'}" enterkeyhint="done" autocomplete="off" aria-label="${esc(f.label(u))}"
+        data-i="setField" data-b="setFieldBlur" data-s="${s.id}" data-f="${f.key}" value="${esc(f.format(s[f.key], u))}" placeholder="${esc(pv)}"></td>`;
+    })
+    .join('');
+  const pace = ex.tracking === 'cardio' && s.done ? fmtPace(s.durationS, s.distanceM) : null;
+  return `<tr class="${s.done ? 'done' : ''}" data-row="${s.id}">
+      <td><button class="set-no ${s.kind}" data-a="setMenu" data-s="${s.id}" aria-label="Set options">${badge}</button></td>
+      <td class="prev">${esc(summarizeSet(ex.tracking, prev, u))}</td>${cells}
+      <td><button class="chk" data-a="tick" data-s="${s.id}" aria-label="Complete set" aria-pressed="${s.done}">${icon('check')}</button></td></tr>
+      ${pace ? `<tr><td colspan="${fields.length + 3}" class="pace">pace ${esc(pace)}</td></tr>` : ''}`;
+}
+
+VIEWS.active = () => {
+  const w = activeWorkout(S);
+  if (!w) return { redirect: 'today' };
+  const u = unit();
+  const info = supersetInfo(w.items.map((i) => i.superset));
+  const st = workoutStats(S, w);
+  let html = `<div class="row between small dim" style="padding:0 4px 8px"><span>${st.sets}/${st.sets + st.undone} sets</span>${
+    st.volumeKg > 0 ? `<span class="tnum">${fmtInt(toDisplayWeight(st.volumeKg, u))} ${u}</span>` : ''
+  }</div>`;
+
+  if (!w.items.length) {
+    html += `<div class="card" style="text-align:center;padding:32px 16px">${icon('barbell', 'faint')}<p class="dim mt8">Add your first exercise. You can pick several at once, or group them into a superset.</p></div>`;
+  }
+  w.items.forEach((item, idx) => {
+    const ex = exById(S, item.exerciseId) || { name: 'Unknown exercise', tracking: 'weight_reps', category: 'strength' };
+    const ss = info[idx];
+    const t = w.templateId ? templateById(S, w.templateId)?.items.find((ti) => ti.exerciseId === item.exerciseId) : null;
+    const prev = previousSets(S, item.exerciseId, w.id, w.startedAt);
+    const sub = [t ? formatTarget(ex.tracking, t) : '', ex.tracking !== 'cardio' ? `rest ${fmtClock(item.restS ?? S.settings.defaultRestS)}` : ''].filter(Boolean).join(' · ');
+    const fields = fieldsFor(ex.tracking);
+    let n = 0;
+    const rows = item.sets.map((s, si) => { if (s.kind !== 'warmup') n++; return setRowHtml(w, item, ex, s, n, prev[si]); }).join('');
+    const cls = ['ex', ss.label ? 'ss' : '', ss.label && !ss.isLast ? 'linked-below' : '', ss.label && !ss.isFirst ? 'linked-above' : ''].join(' ');
+    html += `<section class="${cls}" style="${ssStyle(ss)}">
+      <div class="ex-head">${ssBadge(ss)}<button class="grow" style="text-align:left" data-a="exMenu" data-it="${item.id}">
+        <div class="ex-name ell ${ex.tracking === 'cardio' ? 'cardio' : ''}">${esc(ex.name)}</div><div class="small dim">${esc(sub)}</div></button>
+        <button class="icon-btn" data-a="exMenu" data-it="${item.id}" aria-label="Exercise options">${icon('more')}</button></div>
+      ${item.notes != null ? `<textarea class="note" rows="1" placeholder="Note (seat height, grip, how it felt…)" data-i="itemNote" data-it="${item.id}">${esc(item.notes)}</textarea>` : ''}
+      <table class="sets"><colgroup><col class="c-set"><col class="c-prev">${fields.map(() => '<col>').join('')}<col class="c-chk"></colgroup>
+        <thead><tr><th>SET</th><th>PREVIOUS</th>${fields.map((f) => `<th>${esc(f.label(u).toUpperCase())}</th>`).join('')}<th></th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      <button class="add-set" data-a="addSet" data-it="${item.id}">${icon('plus')} Add set</button></section>`;
+  });
+  html += `<button class="btn mt12" data-a="pickFor" data-mode="workout" data-id="${w.id}">${icon('plus')} Add exercises</button>
+    <div class="caps mt24" style="margin-bottom:6px">Workout notes</div>
+    <textarea class="field" rows="2" placeholder="How did it go? Energy, sleep, pain…" data-i="workoutNote">${esc(w.notes || '')}</textarea>
+    <button class="btn ghost mt24" data-a="discardWorkout">Discard workout</button>`;
+
+  return {
+    title: w.name,
+    titleHtml: `<button data-a="renameWorkout" style="max-width:100%"><div class="ell">${esc(w.name)}</div><div class="small dim tnum" style="font-weight:500" data-elapsed="${w.startedAt}">${fmtClock((Date.now() - w.startedAt) / 1000)}</div></button>`,
+    left: backBtn('today'),
+    right: `<button class="finish-btn" data-a="finishWorkout">Finish</button>`,
+    body: html,
+    noTabs: true,
+    tab: 'today',
+  };
+};
+
+// ---------- handlers ----------
+function activeCtx(setId) {
+  const w = activeWorkout(S);
+  if (!w) return null;
+  const f = findSet(w, setId);
+  return f ? { w, ...f, ex: exById(S, f.item.exerciseId) } : null;
+}
+I.setField = (d, el) => {
+  const c = activeCtx(d.s);
+  if (!c) return;
+  const field = fieldsFor(c.ex.tracking).find((f) => f.key === d.f);
+  const v = field.parse(el.value, unit());
+  if (v === undefined) return; // half-typed / invalid: keep the stored value
+  c.set[d.f] = v;
+  Store.save();
+};
+BL.setFieldBlur = (d, el) => {
+  const c = activeCtx(d.s);
+  if (!c) return;
+  const field = fieldsFor(c.ex.tracking).find((f) => f.key === d.f);
+  el.value = field.format(c.set[d.f], unit());
+};
+A.tick = async (d) => {
+  const c = activeCtx(d.s);
+  if (!c) return;
+  if (c.set.done) {
+    c.set.done = false;
+    c.set.doneAt = null;
+    commit();
+    return;
+  }
+  // A field may still hold text the input handler rejected mid-typing; read it now.
+  const row = document.querySelector(`[data-row="${c.set.id}"]`);
+  if (row) for (const inp of $$('input[data-f]', row)) I.setField(inp.dataset, inp);
+  const res = completeSet(S, c.w, c.item, c.set);
+  if (!res.ok) {
+    alertDlg('Nothing to log yet', res.tracking === 'cardio' ? 'Enter a duration or distance first.' : res.tracking === 'time' ? 'Enter a time in seconds first (e.g. 60).' : 'Enter reps first.');
+    return;
+  }
+  if (navigator.vibrate) navigator.vibrate(15);
+  const idx = c.w.items.indexOf(c.item);
+  if (c.ex.tracking !== 'cardio') {
+    const label = nextUpLabel(c.w, idx);
+    if (!label) Rest.stop();
+    else if (shouldRestAfter(c.w.items.map((i) => i.superset), idx)) Rest.start(c.item.restS ?? S.settings.defaultRestS, label);
+    else if (S.settings.supersetRestS > 0) Rest.start(S.settings.supersetRestS, label);
+    else Rest.stop();
+  }
+  commit();
+};
+A.addSet = (d) => {
+  const w = activeWorkout(S);
+  const item = w && w.items.find((i) => i.id === d.it);
+  if (!item) return;
+  addSet(item);
+  commit();
+};
+A.setMenu = (d) => {
+  const c = activeCtx(d.s);
+  if (!c) return;
+  const kind = (k) => () => { c.set.kind = k; commit(); };
+  menu('Set type', [
+    { label: 'Warm-up', fn: kind('warmup') },
+    { label: 'Working set', fn: kind('working') },
+    { label: 'Drop set', fn: kind('drop') },
+    { label: 'To failure', fn: kind('failure') },
+    { label: 'Delete set', destructive: true, fn: () => { c.item.sets = c.item.sets.filter((s) => s !== c.set); commit(); } },
+  ]);
+};
+A.exMenu = (d) => {
+  const w = activeWorkout(S);
+  const idx = w ? w.items.findIndex((i) => i.id === d.it) : -1;
+  if (idx < 0) return;
+  const item = w.items[idx];
+  const ex = exById(S, item.exerciseId);
+  const info = supersetInfo(w.items.map((i) => i.superset))[idx];
+  const opts = [
+    { label: item.notes != null ? 'Remove note' : 'Add note', fn: () => { item.notes = item.notes != null ? null : ''; commit(); } },
+  ];
+  if (ex.tracking !== 'cardio') {
+    opts.push({ label: `Rest time (${fmtClock(item.restS ?? S.settings.defaultRestS)})`, fn: () => restMenu((v) => { item.restS = v; commit(); }) });
+  }
+  if (idx < w.items.length - 1) {
+    opts.push({ label: info.label && !info.isLast ? 'Unlink superset from next' : 'Superset with next exercise', fn: () => { toggleSupersetItem(w.items, item.id); commit(); } });
+  }
+  if (idx > 0) opts.push({ label: 'Move up', fn: () => { moveItem(w.items, item.id, -1); commit(); } });
+  if (idx < w.items.length - 1) opts.push({ label: 'Move down', fn: () => { moveItem(w.items, item.id, 1); commit(); } });
+  opts.push({ label: 'Exercise history', fn: () => go('exercise/' + item.exerciseId) });
+  opts.push({
+    label: 'Remove exercise',
+    destructive: true,
+    fn: async () => {
+      if (await confirmDlg('Remove exercise?', `${ex.name} and its sets will be removed from this workout.`, 'Remove', true)) {
+        removeItem(w.items, item.id);
+        commit();
+      }
+    },
+  });
+  menu(ex.name, opts);
+};
+function restMenu(onPick) {
+  menu('Rest after each set', [
+    ...REST_CHOICES.map((s) => ({ label: fmtClock(s), fn: () => onPick(s) })),
+    { label: `Default (${fmtClock(S.settings.defaultRestS)})`, fn: () => onPick(null) },
+  ]);
+}
+I.itemNote = (d, el) => {
+  const w = activeWorkout(S);
+  const item = w && w.items.find((i) => i.id === d.it);
+  if (item) { item.notes = el.value; Store.save(); }
+};
+I.workoutNote = (d, el) => {
+  const w = activeWorkout(S);
+  if (w) { w.notes = el.value || null; Store.save(); }
+};
+A.renameWorkout = async () => {
+  const w = activeWorkout(S);
+  if (!w) return;
+  const name = await promptDlg('Workout name', w.name);
+  if (name && name.trim()) { w.name = name.trim(); commit(); }
+};
+A.finishWorkout = async () => {
+  const w = activeWorkout(S);
+  if (!w) return;
+  const st = workoutStats(S, w);
+  if (st.sets === 0) {
+    if (await confirmDlg('No completed sets', 'Tick at least one set, or discard this workout.', 'Discard workout', true)) discardNow(w);
+    return;
+  }
+  const msg = st.undone ? `${plural(st.undone, 'unticked set')} will be discarded.` : 'Nice work.';
+  if (!(await confirmDlg('Finish workout?', msg, 'Finish'))) return;
+  finishWorkout(S, w.id);
+  Rest.stop();
+  if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
+  Store.flush();
+  go(`workout/${w.id}/summary`, { replace: true });
+};
+function discardNow(w) {
+  deleteWorkout(S, w.id);
+  Rest.stop();
+  Store.flush();
+  go('today', { replace: true });
+}
+A.discardWorkout = async () => {
+  const w = activeWorkout(S);
+  if (w && (await confirmDlg('Discard workout?', 'Everything logged in this workout will be deleted.', 'Discard', true))) discardNow(w);
+};
+
+/* ---- 06_templates.js ---- */
+/* ==========================================================================
+   06_templates — template list and editor.
+   ========================================================================== */
+
+VIEWS.templates = () => {
+  const list = listTemplates(S);
+  let html = `<button class="btn primary" data-a="newTemplate">${icon('plus')} New template</button>`;
+  if (!list.length) {
+    html += emptyBox('templates', 'No templates yet', 'Templates are your saved workouts, like “Push A”, “Legs” or “Upper + cardio”. You can also finish a workout and save it as a template.');
+  } else {
+    html += `<div class="stack mt16">${list
+      .map((t) => {
+        const names = t.items.map((i) => exById(S, i.exerciseId)?.name).filter(Boolean).join(', ');
+        return `<div class="card tap" data-a="go" data-to="template/${t.id}"><div class="row"><div class="grow">
+          <div class="bold ell" style="font-size:17px">${esc(t.name)}</div>
+          <div class="small dim" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(names || 'No exercises yet')}</div>
+          <div class="tiny faint mt4">${plural(t.items.length, 'exercise')}${t.lastDone ? ` · last ${esc(fmtDate(t.lastDone))}` : ''}</div></div>
+          <button class="icon-btn" data-a="templateMenu" data-id="${t.id}" aria-label="Template options">${icon('more')}</button>
+          <button class="icon-btn accent" data-a="startTemplate" data-id="${t.id}" aria-label="Start ${esc(t.name)}" style="color:var(--accent)">${icon('play')}</button></div></div>`;
+      })
+      .join('')}</div>`;
+  }
+  return { title: 'Templates', large: true, body: html, tab: 'templates' };
+};
+
+A.newTemplate = () => {
+  const id = createTemplate(S, 'New template');
+  commit({ render: false });
+  ui.focusTemplateName = id;
+  go('template/' + id);
+};
+function templateMenu(t, fromEditor) {
+  menu(t.name, [
+    { label: 'Start workout', fn: () => startFlow(() => startWorkout(S, { templateId: t.id })) },
+    { label: 'Duplicate', fn: () => { const id = duplicateTemplate(S, t.id); commit({ render: false }); if (fromEditor) go('template/' + id, { replace: true }); else rerender(); toast('Template duplicated'); } },
+    {
+      label: 'Delete template',
+      destructive: true,
+      fn: async () => {
+        if (!(await confirmDlg('Delete template?', 'Past workouts are kept.', 'Delete', true))) return;
+        deleteTemplate(S, t.id);
+        commit({ render: false });
+        if (fromEditor) goBack('templates');
+        else rerender();
+      },
+    },
+  ]);
+}
+A.templateMenu = (d, el, ev) => {
+  ev.stopPropagation();
+  const t = templateById(S, d.id);
+  if (t) templateMenu(t, false);
+};
+
+// ---------- editor ----------
+function tField(label, inner, width) {
+  return `<div style="${width ? `width:${width}px;flex:0 0 ${width}px` : 'flex:1;min-width:0'}"><div class="flabel">${esc(label)}</div>${inner}</div>`;
+}
+function tInput(t, item, key, value, placeholder, mode = 'decimal') {
+  return `<input class="num" inputmode="${mode}" enterkeyhint="done" autocomplete="off" data-i="tField" data-b="tFieldBlur" data-t="${t.id}" data-it="${item.id}" data-k="${key}" value="${esc(value)}" placeholder="${esc(placeholder)}">`;
+}
+/** Parse + format for each editable template field. */
+const T_FIELDS = {
+  repMin: { parse: (s) => (s.trim() ? parseCount(s) ?? undefined : null), fmt: (v) => (v == null ? '' : String(v)) },
+  repMax: { parse: (s) => (s.trim() ? parseCount(s) ?? undefined : null), fmt: (v) => (v == null ? '' : String(v)) },
+  weightKg: {
+    parse: (s) => { if (!s.trim()) return null; const n = parseNumber(s); return n == null || n < 0 ? undefined : fromDisplayWeight(n, unit()); },
+    fmt: (v) => fmtWeight(v, unit()),
+  },
+  durationS: { parse: (s) => (s.trim() ? parseDuration(s, 'sec') ?? undefined : null), fmt: (v) => (v == null ? '' : fmtClock(v)) },
+  durationMin: { key: 'durationS', parse: (s) => (s.trim() ? parseDuration(s, 'min') ?? undefined : null), fmt: (v) => (v == null ? '' : String(Math.round(v / 60))) },
+  distanceM: { parse: (s) => { if (!s.trim()) return null; const n = parseNumber(s); return n == null || n < 0 ? undefined : n * 1000; }, fmt: (v) => fmtKm(v) },
+};
+
+VIEWS.template = (r) => {
+  const t = templateById(S, r.id);
+  if (!t) return { redirect: 'templates' };
+  const u = unit();
+  const info = supersetInfo(t.items.map((i) => i.superset));
+  let html = `<input class="title-input" data-i="tName" data-b="tNameBlur" data-t="${t.id}" value="${esc(t.name)}" placeholder="Template name" autocomplete="off" enterkeyhint="done">
+    <textarea class="field" style="background:transparent;padding:4px 0;min-height:28px" rows="1" data-i="tNotes" data-t="${t.id}" placeholder="Notes (optional)">${esc(t.notes || '')}</textarea>
+    <div class="mt16">`;
+  t.items.forEach((item, idx) => {
+    const ex = exById(S, item.exerciseId) || { name: 'Unknown exercise', tracking: 'weight_reps' };
+    const ss = info[idx];
+    const cls = ['card', ss.label ? 'ex ss' : '', ss.label && !ss.isLast ? 'linked-below' : '', ss.label && !ss.isFirst ? 'linked-above' : ''].join(' ');
+    let fields = '';
+    if (ex.tracking === 'cardio') {
+      fields = tField('MIN', tInput(t, item, 'durationMin', T_FIELDS.durationMin.fmt(item.durationS), '–')) + tField('KM', tInput(t, item, 'distanceM', fmtKm(item.distanceM), '–'));
+    } else {
+      fields = tField('SETS', `<div class="stepper"><button data-a="tSets" data-t="${t.id}" data-it="${item.id}" data-d="-1" aria-label="Fewer sets">−</button><span class="bold tnum">${item.sets}</span><button data-a="tSets" data-t="${t.id}" data-it="${item.id}" data-d="1" aria-label="More sets">+</button></div>`, 104);
+      if (ex.tracking === 'time') {
+        fields += tField('TIME (S)', tInput(t, item, 'durationS', T_FIELDS.durationS.fmt(item.durationS), '60'));
+      } else {
+        fields += tField('REPS', `<div class="row" style="gap:4px">${tInput(t, item, 'repMin', T_FIELDS.repMin.fmt(item.repMin), '8', 'numeric')}<span class="faint">–</span>${tInput(t, item, 'repMax', T_FIELDS.repMax.fmt(item.repMax), '12', 'numeric')}</div>`);
+        fields += tField(ex.tracking === 'bodyweight_reps' ? '+' + u.toUpperCase() : u.toUpperCase(), tInput(t, item, 'weightKg', fmtWeight(item.weightKg, u), 'auto'), 64);
+      }
+    }
+    html += `<div class="${cls}" style="margin-bottom:${ss.label && !ss.isLast ? 2 : 12}px;padding:12px;${ssStyle(ss)}">
+      <div class="row">${ssBadge(ss)}<div class="grow bold ell ${ex.tracking === 'cardio' ? 'cardio' : ''}" style="font-size:17px">${esc(ex.name)}</div>
+      <button class="icon-btn" data-a="tItemMenu" data-t="${t.id}" data-it="${item.id}" aria-label="Exercise options">${icon('more')}</button></div>
+      <div class="row mt8" style="align-items:flex-end">${fields}</div>
+      ${ex.tracking !== 'cardio' ? `<button class="small dim mt8" data-a="tRest" data-t="${t.id}" data-it="${item.id}">Rest ${fmtClock(item.restS ?? S.settings.defaultRestS)}${item.restS == null ? ' (default)' : ''} ›</button>` : ''}</div>`;
+  });
+  html += `</div>`;
+  html += t.items.length
+    ? `<p class="tiny faint" style="margin:0 0 12px">Sets pre-fill with what you lifted last time. The template weight is only used until you have history.</p>`
+    : `<p class="dim" style="text-align:center;margin:16px 0">Add exercises. Select two or more and tap “Add as superset” to pair them.</p>`;
+  html += `<button class="btn" data-a="pickFor" data-mode="template" data-id="${t.id}">${icon('plus')} Add exercises</button>`;
+  if (t.items.length) html += `<button class="btn primary mt12" data-a="startTemplate" data-id="${t.id}">${icon('play')} Start workout</button>`;
+  return {
+    title: t.name,
+    titleHtml: '&nbsp;',
+    left: backBtn('templates'),
+    right: `<button class="icon-btn" data-a="tMenu" data-t="${t.id}" aria-label="Template options" style="color:var(--accent)">${icon('more')}</button>`,
+    body: html,
+    tab: 'templates',
+    mount() {
+      if (ui.focusTemplateName === t.id) {
+        ui.focusTemplateName = null;
+        const f = $('.title-input');
+        if (f) { f.focus(); f.select(); }
+      }
+    },
+  };
+};
+
+const tItem = (d) => {
+  const t = templateById(S, d.t);
+  const item = t && t.items.find((i) => i.id === d.it);
+  return item ? { t, item } : null;
+};
+const touchT = (t) => (t.updatedAt = Date.now());
+I.tName = (d, el) => { const t = templateById(S, d.t); if (t) { t.name = el.value; touchT(t); Store.save(); } };
+BL.tNameBlur = (d, el) => { const t = templateById(S, d.t); if (t && !t.name.trim()) { t.name = 'Untitled'; el.value = t.name; Store.save(); } };
+I.tNotes = (d, el) => { const t = templateById(S, d.t); if (t) { t.notes = el.value || null; Store.save(); } };
+I.tField = (d, el) => {
+  const c = tItem(d);
+  if (!c) return;
+  const f = T_FIELDS[d.k];
+  const v = f.parse(el.value);
+  if (v === undefined) return;
+  c.item[f.key || d.k] = v;
+  touchT(c.t);
+  Store.save();
+};
+BL.tFieldBlur = (d, el) => {
+  const c = tItem(d);
+  if (!c) return;
+  const f = T_FIELDS[d.k];
+  el.value = f.fmt(c.item[f.key || d.k]);
+};
+A.tSets = (d) => {
+  const c = tItem(d);
+  if (!c) return;
+  c.item.sets = Math.min(20, Math.max(1, c.item.sets + Number(d.d)));
+  touchT(c.t);
+  commit();
+};
+A.tRest = (d) => {
+  const c = tItem(d);
+  if (c) restMenu((v) => { c.item.restS = v; touchT(c.t); commit(); });
+};
+A.tItemMenu = (d) => {
+  const c = tItem(d);
+  if (!c) return;
+  const { t, item } = c;
+  const idx = t.items.indexOf(item);
+  const info = supersetInfo(t.items.map((i) => i.superset))[idx];
+  const ex = exById(S, item.exerciseId);
+  const opts = [];
+  if (idx < t.items.length - 1) opts.push({ label: info.label && !info.isLast ? 'Unlink superset from next' : 'Superset with next exercise', fn: () => { toggleSupersetItem(t.items, item.id); touchT(t); commit(); } });
+  if (idx > 0) opts.push({ label: 'Move up', fn: () => { moveItem(t.items, item.id, -1); touchT(t); commit(); } });
+  if (idx < t.items.length - 1) opts.push({ label: 'Move down', fn: () => { moveItem(t.items, item.id, 1); touchT(t); commit(); } });
+  opts.push({ label: 'Remove', destructive: true, fn: () => { removeItem(t.items, item.id); touchT(t); commit(); } });
+  menu(ex ? ex.name : 'Exercise', opts);
+};
+A.tMenu = (d) => {
+  const t = templateById(S, d.t);
+  if (t) templateMenu(t, true);
+};
+
+/* ---- 07_history.js ---- */
+/* ==========================================================================
+   07_history — history list (by month) and workout detail / finish summary.
+   ========================================================================== */
+
+VIEWS.history = () => {
+  const list = finishedWorkouts(S);
+  const u = unit();
+  if (!list.length) return { title: 'History', large: true, body: emptyBox('history', 'No workouts yet', 'Finished workouts show up here.'), tab: 'history' };
+  let html = '';
+  let month = '';
+  let group = [];
+  const flush = () => {
+    if (!group.length) return;
+    html += `<div class="caps" style="margin:16px 0 8px">${esc(month)} · ${group.length}</div><div class="stack">${group.join('')}</div>`;
+    group = [];
+  };
+  for (const w of list) {
+    const m = fmtMonth(w.startedAt);
+    if (m !== month) { flush(); month = m; }
+    const st = workoutStats(S, w);
+    const names = w.items.map((i) => exById(S, i.exerciseId)?.name).filter(Boolean).join(', ');
+    group.push(`<div class="card tap" data-a="go" data-to="workout/${w.id}">
+      <div class="row between"><div class="bold ell grow" style="font-size:17px">${esc(w.name)}</div><div class="small dim">${esc(fmtDate(w.startedAt))} · ${fmtTime(w.startedAt)}</div></div>
+      <div class="small dim mt4" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(names)}</div>
+      <div class="row mt8" style="gap:16px;font-size:14px;font-weight:600"><span>${fmtDurShort(st.durationS)}</span><span class="dim">${plural(st.sets, 'set')}</span>
+      ${st.volumeKg > 0 ? `<span class="dim tnum">${fmtInt(toDisplayWeight(st.volumeKg, u))} ${u}</span>` : ''}
+      ${st.cardioS > 0 ? `<span class="cardio">${fmtDurShort(st.cardioS)} cardio</span>` : ''}</div></div>`);
+  }
+  flush();
+  return { title: 'History', large: true, body: html, tab: 'history' };
+};
+
+function fmtRecord(type, value, u) {
+  switch (type) {
+    case 'e1rm':
+    case 'weight': return `${Math.round(toDisplayWeight(value, u) * 10) / 10} ${u}`;
+    case 'volume': return `${fmtInt(toDisplayWeight(value, u))} ${u}`;
+    case 'reps': return `${value} reps`;
+    case 'distance': return `${fmtKm(value)} km`;
+    case 'duration': return fmtClock(value);
+    case 'pace': return `${fmtClock(value)} /km`;
+  }
+  return String(value);
+}
+
+VIEWS.workout = (r) => {
+  const w = workoutById(S, r.id);
+  if (!w) return { redirect: 'history' };
+  if (!w.finishedAt) return { redirect: 'active' };
+  const summary = r.extra === 'summary';
+  const u = unit();
+  const st = workoutStats(S, w);
+  const recs = workoutRecords(S, w.id);
+  const info = supersetInfo(w.items.map((i) => i.superset));
+  let html = summary ? `<div class="caps accent" style="color:var(--accent)">Workout complete</div>` : '';
+  html += `<h1 style="font-size:28px;letter-spacing:-.02em">${esc(w.name)}</h1><div class="dim">${esc(fmtDate(w.startedAt))} · ${fmtTime(w.startedAt)}</div>
+    <div class="card mt16"><div class="stats">${stat('duration', fmtDurShort(st.durationS))}${stat('sets', String(st.sets))}${
+      st.volumeKg > 0 ? stat(`${u} lifted`, fmtInt(toDisplayWeight(st.volumeKg, u))) : ''}${st.cardioS > 0 ? stat('cardio', fmtDurShort(st.cardioS)) : ''}</div></div>`;
+  if (recs.length) {
+    html += `<div class="card accent-border mt12"><div class="row accent bold" style="color:var(--accent)">${icon('trophy')} ${plural(recs.length, 'personal record')}</div>
+      <div class="mt8 stack" style="font-size:15px">${recs
+        .map((x) => `<div class="row between"><div class="ell grow">${esc(x.exerciseName)} <span class="dim">· ${esc(RECORD_LABELS[x.type])}</span></div><div class="bold tnum">${esc(fmtRecord(x.type, x.value, u))}</div></div>`)
+        .join('')}</div></div>`;
+  }
+  if (w.notes) html += `<div class="card mt12 dim" style="white-space:pre-wrap">${esc(w.notes)}</div>`;
+  html += `<div class="stack mt16">`;
+  w.items.forEach((it, idx) => {
+    const ex = exById(S, it.exerciseId) || { name: 'Unknown exercise', tracking: 'weight_reps' };
+    const ss = info[idx];
+    let n = 0;
+    html += `<div class="card tap ${ss.label ? 'ex ss' : ''}" style="padding:14px 16px;margin:0;${ssStyle(ss)}" data-a="go" data-to="exercise/${ex.id}">
+      <div class="row">${ssBadge(ss)}<div class="bold grow ${ex.tracking === 'cardio' ? 'cardio' : ''}" style="font-size:17px">${esc(ex.name)}</div></div>
+      ${it.notes ? `<div class="small dim mt4">${esc(it.notes)}</div>` : ''}
+      <div class="mt8">${it.sets
+        .map((s) => {
+          if (s.kind !== 'warmup') n++;
+          const tag = s.kind === 'working' ? n : { warmup: 'W', drop: 'D', failure: 'F' }[s.kind];
+          const pace = ex.tracking === 'cardio' ? fmtPace(s.durationS, s.distanceM) : null;
+          return `<div class="row" style="gap:12px;padding:2px 0"><span class="faint bold" style="width:18px;text-align:center">${tag}</span>
+            <span class="tnum">${esc(summarizeSet(ex.tracking, s, u))}</span>${s.calories ? `<span class="dim">${s.calories} kcal</span>` : ''}${pace ? `<span class="dim">${esc(pace)}</span>` : ''}</div>`;
+        })
+        .join('')}</div></div>`;
+  });
+  html += `</div>`;
+  html += summary
+    ? `<button class="btn primary mt24" data-a="summaryDone">Done</button>`
+    : `<button class="btn mt24" data-a="repeatWorkout" data-id="${w.id}">${icon('refresh')} Repeat this workout</button>`;
+  return {
+    title: summary ? 'Summary' : 'Workout',
+    left: summary ? '' : backBtn('history'),
+    right: `<button class="icon-btn" data-a="workoutMenu" data-id="${w.id}" aria-label="Workout options" style="color:var(--accent)">${icon('more')}</button>`,
+    body: html,
+    tab: 'history',
+    noTabs: summary,
+  };
+};
+
+A.summaryDone = () => go('today', { replace: true });
+A.workoutMenu = (d) => {
+  const w = workoutById(S, d.id);
+  if (!w) return;
+  menu(w.name, [
+    { label: 'Repeat this workout', fn: () => startFlow(() => repeatWorkout(S, w.id)) },
+    {
+      label: 'Save as template',
+      fn: () => {
+        const id = saveWorkoutAsTemplate(S, w.id);
+        commit({ render: false });
+        toast('Saved as a template');
+        go('template/' + id);
+      },
+    },
+    { label: 'Rename', fn: async () => { const n = await promptDlg('Workout name', w.name); if (n && n.trim()) { w.name = n.trim(); commit(); } } },
+    {
+      label: 'Delete workout',
+      destructive: true,
+      fn: async () => {
+        if (!(await confirmDlg('Delete workout?', 'This permanently removes it from your history.', 'Delete', true))) return;
+        deleteWorkout(S, w.id);
+        commit({ render: false });
+        go('history', { replace: true });
+      },
+    },
+  ]);
+};
+
+/* ---- 08_exercises.js ---- */
+/* ==========================================================================
+   08_exercises — library, exercise detail + progress chart, create/edit
+   sheet, and the multi-select exercise picker used by workouts & templates.
+   ========================================================================== */
+const EX_FILTERS = ['All', 'Recent', ...MUSCLES];
+
+function filterExercises(list, query, filter) {
+  let l = list;
+  if (filter === 'Recent') l = l.filter((e) => e.lastUsed).sort((a, b) => b.lastUsed - a.lastUsed);
+  else if (filter && filter !== 'All') l = l.filter((e) => e.muscle === filter);
+  const q = (query || '').trim().toLowerCase();
+  if (q) {
+    const words = q.split(/\s+/);
+    l = l.filter((e) => words.every((w) => `${e.name} ${e.muscle} ${e.equipment}`.toLowerCase().includes(w)));
+  }
+  return l;
+}
+function exRowHtml(e, { selected = null, action = 'openExercise' } = {}) {
+  const sel = selected ? selected.indexOf(e.id) : -1;
+  const meta = [e.muscle, e.equipment].filter(Boolean).join(' · ') + (e.timesUsed ? ` · ${e.timesUsed}×` : '');
+  return `<button class="list-item" style="width:100%;text-align:left" data-a="${action}" data-id="${e.id}">${exAvatar(e)}
+    <div class="grow"><div class="ell">${esc(e.name)}</div><div class="small dim ell">${esc(meta)}</div></div>
+    ${selected ? `<div class="check ${sel >= 0 ? 'on' : ''}">${sel >= 0 ? sel + 1 : ''}</div>` : icon('chev', 'faint')}</button>`;
+}
+function exListHtml(list, query, opts) {
+  const q = (query || '').trim();
+  const exact = S.exercises.some((e) => !e.hidden && e.name.toLowerCase() === q.toLowerCase());
+  let html = '';
+  if (q.length > 1 && !exact) {
+    html += `<button class="list-item" style="width:100%;text-align:left" data-a="${opts.createAction}" data-name="${esc(q)}">
+      <div class="avatar" style="color:var(--accent)">${icon('plus')}</div><div class="grow accent" style="color:var(--accent)">Create “${esc(q)}”</div></button>`;
+  }
+  html += list.map((e) => exRowHtml(e, opts)).join('');
+  if (!list.length && !(q.length > 1 && !exact)) html += `<p class="dim" style="text-align:center;margin-top:24px">No exercises match.</p>`;
+  return html;
+}
+function filterChips(active, action) {
+  return `<div class="chips">${EX_FILTERS.map((f) => `<button class="chip ${f === active ? 'on' : ''}" data-a="${action}" data-f="${esc(f)}">${esc(f)}</button>`).join('')}</div>`;
+}
+const searchBox = (value, handler, id) =>
+  `<div class="search">${icon('search')}<input id="${id}" type="search" placeholder="Search or type a new exercise" value="${esc(value)}" data-i="${handler}" autocomplete="off" autocorrect="off" enterkeyhint="done"></div>`;
+
+// ---------- library ----------
+const lib = { q: '', f: 'All' };
+VIEWS.exercises = () => {
+  const list = filterExercises(listExercises(S), lib.q, lib.f);
+  return {
+    title: 'Exercises',
+    left: backBtn('today'),
+    right: `<button class="icon-btn" data-a="newExercise" aria-label="New exercise" style="color:var(--accent)">${icon('plus')}</button>`,
+    body: `${searchBox(lib.q, 'libSearch', 'lib-q')}<div class="mt8">${filterChips(lib.f, 'libFilter')}</div>
+      <div id="exlist">${exListHtml(list, lib.q, { createAction: 'libCreate' })}</div>`,
+    tab: 'today',
+  };
+};
+const repaintLib = () => {
+  const el = $('#exlist');
+  if (el) el.innerHTML = exListHtml(filterExercises(listExercises(S), lib.q, lib.f), lib.q, { createAction: 'libCreate' });
+};
+I.libSearch = (d, el) => { lib.q = el.value; repaintLib(); };
+A.libFilter = (d) => { lib.f = d.f; rerender(); };
+A.openExercise = (d) => go('exercise/' + d.id);
+A.newExercise = () => exerciseSheet(null, '');
+A.libCreate = (d) => exerciseSheet(null, d.name);
+
+// ---------- create / edit sheet ----------
+function exerciseSheet(id, name) {
+  const existing = id ? exById(S, id) : null;
+  const form = existing
+    ? { name: existing.name, muscle: existing.muscle, equipment: existing.equipment, tracking: existing.tracking }
+    : { ...guessExercise(name || '') };
+  const body = () => `<div class="caps">Name</div>
+    <input class="field mt8" id="exf-name" value="${esc(form.name)}" placeholder="e.g. Landmine Press" autocomplete="off" enterkeyhint="done">
+    <div class="caps mt24">Type</div><div class="stack mt8">${TRACKING_TYPES.map(
+      (t) => `<button class="card" style="width:100%;text-align:left;padding:12px;${form.tracking === t.id ? 'border-color:var(--accent)' : ''}" data-xf="tracking" data-v="${t.id}">
+        <div class="bold" style="${form.tracking === t.id ? 'color:var(--accent)' : ''}">${esc(t.label)}</div><div class="small dim">${esc(t.hint)}</div></button>`,
+    ).join('')}</div>
+    <div class="caps mt24">Muscle group</div><div class="chips wrap mt8">${MUSCLES.map((m) => `<button class="chip ${form.muscle === m ? 'on' : ''}" data-xf="muscle" data-v="${esc(m)}">${esc(m)}</button>`).join('')}</div>
+    <div class="caps mt24">Equipment</div><div class="chips wrap mt8">${EQUIPMENT.map((m) => `<button class="chip ${form.equipment === m ? 'on' : ''}" data-xf="equipment" data-v="${esc(m)}">${esc(m)}</button>`).join('')}</div>
+    <button class="btn primary mt24" data-xf="save">${existing ? 'Save' : 'Create exercise'}</button>
+    ${existing ? `<button class="btn danger mt12" data-xf="hide">${existing.custom ? 'Delete exercise' : 'Hide from library'}</button>` : ''}`;
+  const el = openSheet({ title: existing ? 'Edit exercise' : 'New exercise', body: body(), full: true });
+  const bodyEl = $('.sheet-body', el);
+  bodyEl.addEventListener('input', (ev) => { if (ev.target.id === 'exf-name') form.name = ev.target.value; });
+  bodyEl.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-xf]');
+    if (!b) return;
+    const k = b.dataset.xf;
+    if (k === 'save') {
+      if (!form.name.trim()) { alertDlg('Name required', 'Give the exercise a name.'); return; }
+      if (existing) {
+        Object.assign(existing, { name: form.name.trim(), muscle: form.tracking === 'cardio' ? 'Cardio' : form.muscle, equipment: form.equipment, tracking: form.tracking, category: form.tracking === 'cardio' ? 'cardio' : 'strength' });
+      } else {
+        const newId = createExercise(S, { ...form, muscle: form.tracking === 'cardio' ? 'Cardio' : form.muscle });
+        ui.lastCreatedExercise = newId;
+      }
+      Layer.close();
+      commit();
+      return;
+    }
+    if (k === 'hide') {
+      const ok = await confirmDlg(existing.custom ? 'Delete exercise?' : 'Hide exercise?', 'It disappears from the library. Past workouts keep their history.', existing.custom ? 'Delete' : 'Hide', true);
+      if (!ok) return;
+      existing.hidden = true;
+      Layer.close();
+      commit({ render: false });
+      go('exercises', { replace: true });
+      return;
+    }
+    form[k] = b.dataset.v;
+    if (k === 'tracking' && b.dataset.v === 'cardio') form.muscle = 'Cardio';
+    const y = bodyEl.scrollTop;
+    bodyEl.innerHTML = body();
+    bodyEl.scrollTop = y;
+  });
+  if (!existing) setTimeout(() => $('#exf-name', el)?.focus(), 80);
+}
+
+// ---------- detail ----------
+const detailMetric = {};
+function metricsFor(tracking, u) {
+  const w = (v) => String(Math.round(toDisplayWeight(v, u) * 10) / 10);
+  switch (tracking) {
+    case 'bodyweight_reps': return [{ k: 'reps', label: 'Most reps', v: (st) => st.maxReps, f: (v) => String(Math.round(v)) }];
+    case 'time': return [{ k: 'hold', label: 'Longest hold', v: (st, sets) => Math.max(0, ...sets.map((s) => s.durationS || 0)) || null, f: fmtClock }];
+    case 'cardio': return [
+      { k: 'dist', label: 'Distance', v: (st) => st.distanceM || null, f: (v) => `${fmtKm(v)} km` },
+      { k: 'time', label: 'Duration', v: (st) => st.durationS || null, f: fmtClock },
+      { k: 'pace', label: 'Pace /km', invert: true, v: (st, sets) => bestPace(sets), f: fmtClock },
+    ];
+    default: return [
+      { k: 'e1rm', label: 'Est. 1RM', v: (st) => st.bestE1rm, f: w, unit: true },
+      { k: 'weight', label: 'Heaviest', v: (st) => st.maxWeight, f: w, unit: true },
+      { k: 'volume', label: 'Volume', v: (st) => st.volumeKg || null, f: (v) => fmtInt(toDisplayWeight(v, u)), unit: true },
+    ];
+  }
+}
+function lineChart(points, { color = 'var(--accent)', format = String, invert = false } = {}) {
+  if (points.length < 2) return `<p class="small dim" style="padding:16px 0">Log this exercise twice to see a trend.</p>`;
+  const W = 340, H = 150, pl = 6, pr = 48, pt = 12, pb = 12;
+  const xs = points.map((p) => p.x), ys = points.map((p) => p.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  let minY = Math.min(...ys), maxY = Math.max(...ys);
+  if (minY === maxY) { minY -= 1; maxY += 1; }
+  const w = W - pl - pr, h = H - pt - pb;
+  const sx = (x) => pl + (maxX === minX ? w / 2 : ((x - minX) / (maxX - minX)) * w);
+  const sy = (y) => { const t = (y - minY) / (maxY - minY); return pt + (invert ? t : 1 - t) * h; };
+  const d = points.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join(' ');
+  const top = invert ? minY : maxY, bottom = invert ? maxY : minY;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Progress chart">
+    <line x1="${pl}" x2="${pl + w}" y1="${pt}" y2="${pt}" stroke="var(--border)" stroke-dasharray="3 4"/>
+    <line x1="${pl}" x2="${pl + w}" y1="${pt + h}" y2="${pt + h}" stroke="var(--border)" stroke-dasharray="3 4"/>
+    <text x="${W - 2}" y="${pt + 4}" fill="var(--faint)" font-size="11" text-anchor="end">${esc(format(top))}</text>
+    <text x="${W - 2}" y="${pt + h + 4}" fill="var(--faint)" font-size="11" text-anchor="end">${esc(format(bottom))}</text>
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${points.map((p, i) => `<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="${i === points.length - 1 ? 4 : 2}" fill="${color}"/>`).join('')}</svg>`;
+}
+
+VIEWS.exercise = (r) => {
+  const ex = exById(S, r.id);
+  if (!ex) return { redirect: 'exercises' };
+  const u = unit();
+  const hist = exerciseHistory(S, ex.id);
+  const metrics = metricsFor(ex.tracking, u);
+  const m = metrics.find((x) => x.k === detailMetric[ex.id]) || metrics[0];
+  const points = hist.slice().reverse().map((h) => ({ x: h.startedAt, y: m.v(sessionStats(h.sets), h.sets) })).filter((p) => p.y != null && p.y > 0);
+  const best = points.length ? (m.invert ? Math.min(...points.map((p) => p.y)) : Math.max(...points.map((p) => p.y))) : null;
+  let html = `<h1 style="font-size:28px;letter-spacing:-.02em">${esc(ex.name)}</h1><div class="row mt8">${ex.muscle ? `<span class="pill">${esc(ex.muscle.toUpperCase())}</span>` : ''}${
+    ex.equipment ? `<span class="pill">${esc(ex.equipment.toUpperCase())}</span>` : ''}${ex.hidden ? `<span class="pill danger">HIDDEN</span>` : ''}</div>
+    <div class="card mt16"><div class="stats">${stat('sessions', String(hist.length))}${stat('best · ' + m.label, best != null ? m.f(best) : '—')}${stat('last', hist[0] ? fmtShortDate(hist[0].startedAt) : '—')}</div></div>`;
+  if (metrics.length > 1) html += `<div class="chips mt12">${metrics.map((x) => `<button class="chip ${x.k === m.k ? 'on' : ''}" data-a="metric" data-ex="${ex.id}" data-k="${x.k}">${esc(x.label)}</button>`).join('')}</div>`;
+  html += `<div class="card mt8"><div class="caps">${esc(m.label)}${m.unit ? ` (${u})` : ''}</div>${lineChart(points, { color: ex.tracking === 'cardio' ? 'var(--cardio)' : 'var(--accent)', format: m.f, invert: m.invert })}</div>`;
+  html += `<div class="section"><span class="caps">History</span></div>`;
+  if (!hist.length) html += `<p class="dim">No sessions yet.</p>`;
+  html += `<div class="stack">${hist
+    .map((h) => {
+      const e1 = ex.tracking === 'weight_reps' ? sessionStats(h.sets).bestE1rm : null;
+      return `<div class="card tap" data-a="go" data-to="workout/${h.workoutId}"><div class="row between"><span class="bold">${esc(fmtDate(h.startedAt))}</span><span class="small dim ell" style="max-width:55%">${esc(h.name)}</span></div>
+        <div class="dim tnum mt4">${h.sets.map((s) => (s.kind === 'warmup' ? `(${esc(summarizeSet(ex.tracking, s, u))})` : esc(summarizeSet(ex.tracking, s, u)))).join('&nbsp;&nbsp; ')}</div>
+        ${e1 ? `<div class="tiny faint mt4">e1RM ${Math.round(toDisplayWeight(e1, u) * 10) / 10} ${u}</div>` : ''}</div>`;
+    })
+    .join('')}</div>`;
+  return {
+    title: ex.name,
+    titleHtml: '&nbsp;',
+    left: backBtn('exercises'),
+    right: `<button class="icon-btn" data-a="editExercise" data-id="${ex.id}" aria-label="Edit exercise" style="color:var(--accent)">${icon('edit')}</button>`,
+    body: html,
+    tab: 'today',
+  };
+};
+A.metric = (d) => { detailMetric[d.ex] = d.k; rerender(); };
+A.editExercise = (d) => exerciseSheet(d.id);
+
+// ---------- picker ----------
+A.pickFor = (d) => openPicker(d.mode, d.id);
+function openPicker(mode, targetId) {
+  const st = { q: '', f: 'All', sel: [] };
+  const listHtml = () => exListHtml(filterExercises(listExercises(S), st.q, st.f), st.q, { selected: st.sel, action: 'pickToggle', createAction: 'pickCreate' });
+  const footHtml = () =>
+    st.sel.length
+      ? `<div class="sel-bar">${st.sel.length > 1 ? `<button class="btn" style="width:auto;flex:0 0 auto" data-pk="superset">Add as superset</button>` : ''}
+         <button class="btn primary grow" data-pk="add">Add ${plural(st.sel.length, 'exercise')}</button></div>`
+      : `<p class="small dim" style="text-align:center;margin:6px 0">Tap exercises to select them. Pick two or more for a superset.</p>`;
+  const el = openSheet({
+    title: 'Add exercises',
+    full: true,
+    body: `<div style="position:sticky;top:0;background:var(--surface);padding-bottom:4px;z-index:1">${searchBox('', 'pickSearch', 'pick-q')}<div class="mt8" id="pick-chips">${filterChips('All', 'pickFilter')}</div></div><div id="pick-list">${listHtml()}</div>`,
+    foot: `<div id="pick-foot">${footHtml()}</div>`,
+  });
+  const repaint = () => {
+    $('#pick-list', el).innerHTML = listHtml();
+    $('#pick-foot', el).innerHTML = footHtml();
+  };
+  Picker.current = { st, repaint, el };
+  el.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-pk]');
+    if (!b) return;
+    const asSuperset = b.dataset.pk === 'superset';
+    if (mode === 'template') addExercisesToTemplate(S, targetId, st.sel, asSuperset);
+    else addExercisesToWorkout(S, targetId, st.sel, asSuperset);
+    Picker.current = null;
+    Layer.close();
+    commit();
+  });
+}
+const Picker = { current: null };
+I.pickSearch = (d, el) => { const p = Picker.current; if (p) { p.st.q = el.value; p.repaint(); } };
+A.pickFilter = (d) => {
+  const p = Picker.current;
+  if (!p) return;
+  p.st.f = d.f;
+  $('#pick-chips', p.el).innerHTML = filterChips(d.f, 'pickFilter');
+  p.repaint();
+};
+A.pickToggle = (d) => {
+  const p = Picker.current;
+  if (!p) return;
+  const i = p.st.sel.indexOf(d.id);
+  if (i >= 0) p.st.sel.splice(i, 1);
+  else p.st.sel.push(d.id);
+  if (navigator.vibrate) navigator.vibrate(8);
+  p.repaint();
+};
+A.pickCreate = (d) => {
+  const p = Picker.current;
+  if (!p) return;
+  const id = createExercise(S, guessExercise(d.name));
+  Store.save();
+  if (!p.st.sel.includes(id)) p.st.sel.push(id);
+  p.st.q = '';
+  const q = $('#pick-q', p.el);
+  if (q) q.value = '';
+  p.repaint();
+  toast(`Created “${d.name}”. Edit its type later in the library if needed.`);
+};
+
+/* ---- 09_settings.js ---- */
+/* ==========================================================================
+   09_settings — settings, backup export/import, restore point, erase,
+   install help, version & update check.
+   ========================================================================== */
+const REST_DEFAULTS = [45, 60, 90, 120, 150, 180, 240];
+const SUPERSET_RESTS = [0, 10, 15, 20, 30, 45, 60];
+const DAY_MS = 86400000;
+
+function settingRow(ic, label, { value = '', action = '', right = null, danger = false, data = '' } = {}) {
+  const inner = `${icon(ic)}<span class="grow ${danger ? 'danger' : ''}">${esc(label)}</span>${value ? `<span class="dim">${esc(value)}</span>` : ''}${right ?? (action ? icon('chev', 'chev') : '')}`;
+  return action ? `<button class="setting" data-a="${action}" ${data}>${inner}</button>` : `<div class="setting">${inner}</div>`;
+}
+const toggle = (on, action) => `<button class="switch ${on ? 'on' : ''}" data-a="${action}" role="switch" aria-checked="${on}"></button>`;
+function agoText(ts) {
+  if (!ts) return 'never';
+  const days = Math.floor((Date.now() - ts) / DAY_MS);
+  return days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+}
+
+VIEWS.settings = () => {
+  const s = S.settings;
+  const counts = stateCounts(S);
+  let html = `<div class="caps">Units</div><div class="chips mt8"><button class="chip ${s.unit === 'kg' ? 'on' : ''}" data-a="setUnit" data-u="kg">Kilograms (kg)</button>
+    <button class="chip ${s.unit === 'lb' ? 'on' : ''}" data-a="setUnit" data-u="lb">Pounds (lb)</button></div>
+    <div class="caps mt24">Workout</div><div class="card mt8" style="padding:0 16px">
+    ${settingRow('timer', 'Default rest', { value: fmtClock(s.defaultRestS), action: 'pickDefaultRest' })}
+    ${settingRow('link', 'Rest inside a superset', { value: s.supersetRestS ? fmtClock(s.supersetRestS) : 'None', action: 'pickSupersetRest' })}
+    ${settingRow('bell', 'Beep when rest is over', { right: toggle(s.restSound, 'toggleSound') })}
+    ${settingRow('sun', 'Keep screen on during workouts', { right: toggle(s.keepAwake, 'toggleAwake') })}
+    </div><p class="tiny faint mt8">A web app can't alert you while the phone is locked, so Knur keeps the screen on during a workout and beeps in the app when your rest is over. Turn the ringer up.</p>
+    <div class="caps mt24">Library</div><div class="card mt8" style="padding:0 16px">${settingRow('barbell', 'Exercises', { action: 'go', data: 'data-to="exercises"' })}</div>
+    <div class="caps mt24">Your data</div><div class="card mt8" style="padding:0 16px">
+    ${settingRow('share', 'Export backup', { value: `last ${agoText(s.lastBackupAt)}`, action: 'exportBackup' })}
+    ${settingRow('download', 'Restore from backup', { action: 'importBackup' })}
+    <div id="rp-row"></div>
+    ${settingRow('trash', 'Erase all data', { action: 'eraseAll', danger: true })}
+    </div><p class="tiny faint mt8">${plural(counts.workouts, 'workout')}, ${plural(counts.templates, 'template')}, ${plural(counts.custom, 'custom exercise')}.
+    Everything stays on this phone. Export now and then and keep the file in iCloud Drive.</p>
+    <input type="file" id="import-file" accept="application/json,.json" class="hidden" data-c="importFile">
+    <div class="caps mt24">App</div><div class="card mt8" style="padding:0 16px">
+    ${settingRow('phone', 'Install on iPhone', { value: isStandalone() ? 'installed' : '', action: 'installHelp' })}
+    ${settingRow('refresh', 'Check for an update', { action: 'checkUpdate' })}
+    ${settingRow('info', 'Version', { value: `${APP.version} (${APP.built})`, action: 'runSelfTest' })}
+    </div><p class="tiny faint mt8" style="text-align:center">${esc(APP.name)} · no account, no server, works offline</p>`;
+  return {
+    title: 'Settings', large: true, body: html, tab: 'settings',
+    async mount() {
+      const p = await Store.restorePoint();
+      const row = $('#rp-row');
+      if (p && row) row.innerHTML = settingRow('undo', 'Undo last restore / erase', { value: fmtShortDate(p.at), action: 'useRestorePoint' });
+    },
+  };
+};
+
+A.setUnit = (d) => { S.settings.unit = d.u; commit(); };
+A.pickDefaultRest = () => menu('Default rest between sets', REST_DEFAULTS.map((v) => ({ label: fmtClock(v), fn: () => { S.settings.defaultRestS = v; commit(); } })));
+A.pickSupersetRest = () =>
+  menu('Rest between exercises of a superset round', SUPERSET_RESTS.map((v) => ({ label: v ? fmtClock(v) : 'None (go straight to the next)', fn: () => { S.settings.supersetRestS = v; commit(); } })));
+A.toggleSound = () => { S.settings.restSound = !S.settings.restSound; if (S.settings.restSound) { Beep.unlock(); Beep.play(); } commit(); };
+A.toggleAwake = () => { S.settings.keepAwake = !S.settings.keepAwake; commit(); };
+
+// ---------- backup ----------
+A.exportBackup = async () => {
+  const name = backupFileName();
+  const json = JSON.stringify(makeBackup(S));
+  const blob = new Blob([json], { type: 'application/json' });
+  let shared = false;
+  try {
+    const file = new File([blob], name, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: name });
+      shared = true;
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return; // user closed the share sheet
+  }
+  if (!shared) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  S.settings.lastBackupAt = Date.now();
+  commit();
+  toast(shared ? 'Backup ready. Save it to Files or iCloud Drive.' : `Saved ${name}`);
+};
+A.importBackup = () => $('#import-file').click();
+C.importFile = async (d, el) => {
+  const file = el.files && el.files[0];
+  el.value = '';
+  if (!file) return;
+  let next;
+  try {
+    next = stateFromBackup(JSON.parse(await file.text()));
+  } catch (e) {
+    alertDlg('Can’t restore that file', e instanceof SyntaxError ? 'The file is not valid JSON.' : e.message);
+    return;
+  }
+  const c = stateCounts(next);
+  const ok = await confirmDlg('Replace all data?', `The backup has ${plural(c.workouts, 'workout')} and ${plural(c.templates, 'template')}. Everything currently in the app is replaced. A restore point is kept so you can undo.`, 'Replace', true);
+  if (!ok) return;
+  await Store.snapshot('before restore');
+  replaceState(next);
+  toast(`Restored ${plural(c.workouts, 'workout')}`);
+};
+function replaceState(next) {
+  next.restTimer = null;
+  S = next;
+  Store.flush();
+  go('today', { replace: true });
+}
+A.useRestorePoint = async () => {
+  const p = await Store.restorePoint();
+  if (!p) return;
+  const ok = await confirmDlg('Undo?', `Go back to your data from ${fmtDate(p.at)} ${fmtTime(p.at)} (${plural(p.counts.workouts, 'workout')}). Your current data becomes the new restore point.`, 'Undo');
+  if (!ok) return;
+  const old = normalizeState(JSON.parse(p.state));
+  await Store.snapshot('before undo');
+  replaceState(old);
+  toast('Done');
+};
+A.eraseAll = async () => {
+  const ok = await confirmDlg('Erase all data?', 'Deletes every workout, template and custom exercise on this phone. A restore point is kept so you can undo.', 'Erase', true);
+  if (!ok) return;
+  await Store.snapshot('before erase');
+  const settings = S.settings;
+  const fresh = normalizeState(null);
+  fresh.settings = settings;
+  replaceState(fresh);
+  toast('All data erased');
+};
+
+// ---------- app ----------
+A.installHelp = () =>
+  alertDlg(
+    isStandalone() ? 'Already installed' : 'Install on your iPhone',
+    isStandalone()
+      ? 'You are running the installed app. To update it, use “Check for an update”.'
+      : '1. Open this page in Safari.\n2. Tap the Share button.\n3. Choose “Add to Home Screen”, then Add.\nIt opens full screen and works offline. Data saved in Safari and in the Home Screen app are separate, so start logging in the installed app.',
+  );
+A.checkUpdate = async () => {
+  if (!('serviceWorker' in navigator) || location.protocol === 'file:') {
+    alertDlg('Test build', 'This copy runs from a file, so it doesn’t update itself. Install from the GitHub page to get updates.');
+    return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) { toast('Not installed yet'); return; }
+    await reg.update();
+    if (reg.installing || reg.waiting) toast('Updating…');
+    else toast(`You have the latest version (${APP.version})`);
+  } catch (e) {
+    toast('Couldn’t check. Are you online?');
+  }
+};
+A.runSelfTest = () => {
+  const r = KS.test({ quiet: true });
+  alertDlg('Self-test', r.failed ? `${r.passed} passed, ${r.failed} failed:\n${r.failures.slice(0, 5).join('\n')}` : `All ${r.passed} checks passed.`);
+};
+
+/* ---- 10_tests.js ---- */
+/* ==========================================================================
+   10_tests — self-tests. Run KS.test() in the browser console, or
+   `node source/run-tests.js` on the PC. DOM-free; uses a throwaway state.
+   ========================================================================== */
+KS.test = function test({ quiet = false } = {}) {
+  let passed = 0;
+  const failures = [];
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const ok = (name, cond) => (cond ? passed++ : failures.push(name));
+  const is = (name, actual, expected) => (eq(actual, expected) ? passed++ : failures.push(`${name}: got ${JSON.stringify(actual)}, want ${JSON.stringify(expected)}`));
+  const near = (name, a, b, eps = 0.01) => ok(`${name} (${a} ≈ ${b})`, a != null && Math.abs(a - b) < eps);
+  const set = (weightKg, reps, extra = {}) => ({ weightKg, reps, durationS: null, distanceM: null, calories: null, ...extra });
+  const DAY = 86400000;
+
+  // --- parsing ---
+  is('comma decimal', parseNumber('82,5'), 82.5);
+  is('dot decimal', parseNumber('82.5'), 82.5);
+  is('spaces', parseNumber(' 100 '), 100);
+  is('trailing dot', parseNumber('10.'), 10);
+  is('leading dot', parseNumber('.5'), 0.5);
+  is('empty', parseNumber(''), null);
+  is('junk', parseNumber('abc'), null);
+  is('two dots', parseNumber('1.2.3'), null);
+  is('count', parseCount('8'), 8);
+  is('negative count', parseCount('-1'), null);
+  is('mm:ss', parseDuration('1:30'), 90);
+  is('h:mm:ss', parseDuration('1:02:03'), 3723);
+  is('plain seconds', parseDuration('45'), 45);
+  is('plain minutes', parseDuration('20', 'min'), 1200);
+  is('comma minutes', parseDuration('20,5', 'min'), 1230);
+  is('bad duration', parseDuration('1:x'), null);
+
+  // --- units & formatting ---
+  is('lb round trip', toDisplayWeight(fromDisplayWeight(225, 'lb'), 'lb'), 225);
+  is('kg format', fmtWeight(82.5, 'kg'), '82.5');
+  is('null weight', fmtWeight(null, 'kg'), '');
+  is('clock', fmtClock(75), '1:15');
+  is('clock hours', fmtClock(3723), '1:02:03');
+  is('clock negative', fmtClock(-5), '0:00');
+  is('pace', fmtPace(1200, 4000), '5:00 /km');
+  is('pace no distance', fmtPace(100, 0), null);
+  is('dur short', fmtDurShort(3900), '1h 5m');
+  is('dur minutes', fmtDurShort(600), '10m');
+  is('int', fmtInt(12450), '12 450');
+  is('plural one', plural(1, 'set'), '1 set');
+  is('plural many', plural(3, 'set'), '3 sets');
+  is('plural y', plural(2, 'category'), '2 categories');
+  is('plural vowel y', plural(2, 'day'), '2 days');
+  is('esc', esc('<a href="x">'), '&lt;a href=&quot;x&quot;&gt;');
+  const mon = new Date(startOfWeek(new Date(2026, 8, 23, 15).getTime()));
+  is('week starts Monday', [mon.getDay(), mon.getDate(), mon.getHours()], [1, 21, 0]);
+  const ids = new Set();
+  for (let i = 0; i < 5000; i++) ids.add(newId());
+  is('unique ids', ids.size, 5000);
+
+  // --- stats ---
+  is('e1rm single', estimate1RM(100, 1), 100);
+  near('e1rm 10 reps', estimate1RM(100, 10), 133.33);
+  is('e1rm capped', estimate1RM(100, 13), null);
+  const st = sessionStats([set(40, 10, { kind: 'warmup' }), set(80, 8), set(80, 6)]);
+  is('volume excludes warm-up', st.volumeKg, 80 * 14);
+  is('sets include warm-up', st.sets, 3);
+  const prevS = [[set(80, 8), set(80, 8)]];
+  is('strength records', detectRecords('weight_reps', [set(82.5, 8), set(82.5, 8)], prevS).map((h) => h.type).sort(), ['e1rm', 'volume', 'weight']);
+  is('no records first time', detectRecords('weight_reps', [set(80, 8)], []), []);
+  is('no records when weaker', detectRecords('weight_reps', [set(70, 5)], prevS), []);
+  is('pace record (lower wins)', detectRecords('cardio', [set(null, null, { durationS: 1440, distanceM: 5000 })], [[set(null, null, { durationS: 1500, distanceM: 5000 })]]).map((h) => h.type), ['pace']);
+  is('reps record', detectRecords('bodyweight_reps', [set(null, 12)], [[set(null, 10)]]).map((h) => h.type), ['reps']);
+  is('hold record', detectRecords('time', [set(null, null, { durationS: 75 })], [[set(null, null, { durationS: 60 })]]).map((h) => h.type), ['duration']);
+  is('short pace ignored', bestPace([set(null, null, { durationS: 60, distanceM: 100 })]), null);
+
+  // --- supersets ---
+  let keys = [null, null, null, null];
+  keys = toggleLinkWithNext(keys, 0);
+  ok('link pair', keys[0] != null && keys[0] === keys[1] && keys[2] == null);
+  keys = toggleLinkWithNext(keys, 1);
+  is('triple labels', supersetInfo(keys).map((i) => i.label), ['A1', 'A2', 'A3', null]);
+  keys = toggleLinkWithNext(keys, 0);
+  is('unlink first', supersetInfo(keys).map((i) => i.label), [null, 'A1', 'A2', null]);
+  is('two groups', supersetInfo(['x', 'x', null, 'y', 'y']).map((i) => i.label), ['A1', 'A2', null, 'B1', 'B2']);
+  is('rest only after round', [0, 1, 2].map((i) => shouldRestAfter(['x', 'x', null], i)), [false, true, true]);
+  is('orphans normalised', normalizeKeys(['x', null, 'y']), [null, null, null]);
+
+  // --- prefill & targets ---
+  const prev = [set(80, 8), set(80, 7)];
+  is('prefill from last time', [prefillSet(0, prev, { weightKg: 60, repMin: 6 }).weightKg, prefillSet(0, prev, null).reps], [80, 8]);
+  is('prefill beyond last time', prefillSet(3, prev, null).reps, 7);
+  is('prefill from template', [prefillSet(0, [], { weightKg: 60, repMin: 6, repMax: 8 }).weightKg, prefillSet(0, [], { repMin: 6, repMax: 8 }).reps], [60, 6]);
+  is('set count template', initialSetCount('weight_reps', { sets: 4 }, []), 4);
+  is('set count history', initialSetCount('weight_reps', null, prev), 2);
+  is('set count cardio', initialSetCount('cardio', null, []), 1);
+  is('target range', formatTarget('weight_reps', { sets: 3, repMin: 6, repMax: 8 }), '3 × 6–8');
+  is('target fixed', formatTarget('weight_reps', { sets: 4, repMin: 10, repMax: 10 }), '4 × 10');
+  is('target cardio', formatTarget('cardio', { sets: 1, durationS: 1200, distanceM: 3500 }), '20 min · 3.5 km');
+  is('summary weight', summarizeSet('weight_reps', set(80, 8), 'kg'), '80×8');
+  is('summary added', summarizeSet('bodyweight_reps', set(10, 12), 'kg'), '+10×12');
+  is('summary cardio', summarizeSet('cardio', set(null, null, { durationS: 1200, distanceM: 3200 }), 'kg'), '20:00 · 3.2 km');
+  is('field parse comma kg', fieldsFor('weight_reps')[0].parse('82,5', 'kg'), 82.5);
+  is('field parse bad', fieldsFor('weight_reps')[1].parse('x', 'kg'), undefined);
+  is('field parse cleared', fieldsFor('weight_reps')[1].parse('', 'kg'), null);
+  is('field minutes', fieldsFor('cardio')[0].parse('20', 'kg'), 1200);
+
+  // --- model: seed ---
+  const T = normalizeState(null);
+  const nSeed = T.exercises.length;
+  ok('seeded exercises', nSeed >= 70);
+  is('seed idempotent', seedExercises(T), 0);
+  is('unique seed ids', new Set(T.exercises.map((e) => e.id)).size, nSeed);
+  ok('12 cardio', T.exercises.filter((e) => e.tracking === 'cardio').length === 12);
+  const BENCH = slugId('Bench Press'), ROW = slugId('Barbell Row'), TREAD = slugId('Treadmill'), PLANK = slugId('Plank');
+  const custom = createExercise(T, guessExercise('Landmine Press'));
+  is('no duplicate custom', createExercise(T, guessExercise('landmine press')), custom);
+  is('guess cardio', guessExercise('Morning run').tracking, 'cardio');
+
+  // --- model: a full workout ---
+  const logAll = (w, values) => {
+    for (const it of w.items) for (const s of it.sets) Object.assign(s, values[it.exerciseId] || {}, { done: true, doneAt: Date.now() });
+  };
+  const w1id = startWorkout(T);
+  const w1 = workoutById(T, w1id);
+  w1.startedAt -= 3 * DAY;
+  addExercisesToWorkout(T, w1id, [BENCH, TREAD], false);
+  is('default set counts', w1.items.map((i) => i.sets.length), [3, 1]);
+  is('one active workout', activeWorkout(T).id, w1id);
+  logAll(w1, { [BENCH]: { weightKg: 80, reps: 8 }, [TREAD]: { durationS: 1200, distanceM: 3000 } });
+  addSet(w1.items[0]);
+  is('stats before finish', [workoutStats(T, w1).sets, workoutStats(T, w1).undone], [4, 1]);
+  finishWorkout(T, w1id);
+  ok('finished', !!w1.finishedAt && !activeWorkout(T));
+  is('undone sets dropped', w1.items[0].sets.length, 3);
+  is('first session no records', workoutRecords(T, w1id), []);
+
+  const w2id = startWorkout(T);
+  const w2 = workoutById(T, w2id);
+  addExercisesToWorkout(T, w2id, [BENCH, TREAD], false);
+  is('prefilled from last session', w2.items[0].sets.map((s) => [s.weightKg, s.reps]), [[80, 8], [80, 8], [80, 8]]);
+  is('cardio prefilled', w2.items[1].sets[0].durationS, 1200);
+  // Tick with carry-forward: clear later sets, change set 1, tick it.
+  w2.items[0].sets.forEach((s) => { s.weightKg = null; s.reps = null; });
+  Object.assign(w2.items[0].sets[0], { weightKg: 82.5, reps: 8 });
+  ok('complete set', completeSet(T, w2, w2.items[0], w2.items[0].sets[0]).ok);
+  is('carried forward', w2.items[0].sets.map((s) => [s.weightKg, s.reps, s.done]), [[82.5, 8, true], [82.5, 8, false], [82.5, 8, false]]);
+  // Empty set with no history can't be ticked.
+  const w2b = { ...w2, items: [] };
+  ok('empty set refused', !completeSet(T, w2b, { exerciseId: custom, sets: [makeSet({})] }, makeSet({})).ok);
+  w2.items[0].sets.forEach((s) => completeSet(T, w2, w2.items[0], s));
+  Object.assign(w2.items[1].sets[0], { durationS: 1150, distanceM: 3000 });
+  completeSet(T, w2, w2.items[1], w2.items[1].sets[0]);
+  finishWorkout(T, w2id);
+  is('records', workoutRecords(T, w2id).map((r) => `${r.exerciseName}:${r.type}`).sort(), ['Bench Press:e1rm', 'Bench Press:volume', 'Bench Press:weight', 'Treadmill:pace']);
+  near('volume', workoutStats(T, w2).volumeKg, 82.5 * 8 * 3);
+  is('cardio time', workoutStats(T, w2).cardioS, 1150);
+  is('history newest first', exerciseHistory(T, BENCH).map((h) => h.workoutId), [w2id, w1id]);
+  is('previous excludes itself', previousSets(T, BENCH, w2id, w2.startedAt)[0].weightKg, 80);
+  is('usage counted', listExercises(T).find((e) => e.id === BENCH).timesUsed, 2);
+
+  // --- model: supersets in a workout ---
+  const w3id = startWorkout(T);
+  const w3 = workoutById(T, w3id);
+  addExercisesToWorkout(T, w3id, [BENCH, ROW], true);
+  addExercisesToWorkout(T, w3id, [PLANK], false);
+  is('superset added', supersetInfo(w3.items.map((i) => i.superset)).map((i) => i.label), ['A1', 'A2', null]);
+  toggleSupersetItem(w3.items, w3.items[1].id);
+  is('link third', supersetInfo(w3.items.map((i) => i.superset)).map((i) => i.label), ['A1', 'A2', 'A3']);
+  removeItem(w3.items, w3.items[1].id);
+  is('remove keeps pair', supersetInfo(w3.items.map((i) => i.superset)).map((i) => i.label), ['A1', 'A2']);
+  moveItem(w3.items, w3.items[1].id, -1);
+  is('move breaks pair', [w3.items.map((i) => i.exerciseId), w3.items.map((i) => i.superset)], [[PLANK, BENCH], [null, null]]);
+  deleteWorkout(T, w3id);
+  ok('deleted', !workoutById(T, w3id));
+
+  // --- model: templates ---
+  const tid = createTemplate(T, 'Push A');
+  addExercisesToTemplate(T, tid, [BENCH, ROW], false);
+  addExercisesToTemplate(T, tid, [TREAD], false);
+  const t = templateById(T, tid);
+  Object.assign(t.items[0], { sets: 4, repMin: 6, repMax: 8, weightKg: 60 });
+  toggleSupersetItem(t.items, t.items[0].id);
+  ok('template superset', t.items[0].superset && t.items[0].superset === t.items[1].superset);
+  is('cardio template default', t.items[2].durationS, 1200);
+  const w4id = startWorkout(T, { templateId: tid });
+  const w4 = workoutById(T, w4id);
+  is('from template name', w4.name, 'Push A');
+  is('from template sets', w4.items[0].sets.length, 4);
+  is('history beats template weight', w4.items[0].sets[0].weightKg, 82.5);
+  is('template weight used without history', w4.items[1].sets[0].weightKg, null);
+  is('row reps from template', w4.items[1].sets[0].reps, 8);
+  ok('superset copied', w4.items[0].superset && w4.items[0].superset === w4.items[1].superset);
+  logAll(w4, { [BENCH]: { weightKg: 85, reps: 6 }, [ROW]: { weightKg: 50, reps: 10 }, [TREAD]: { durationS: 900 } });
+  finishWorkout(T, w4id);
+  is('last done tracked', listTemplates(T)[0].id, tid);
+  const saved = templateById(T, saveWorkoutAsTemplate(T, w4id));
+  is('saved template', [saved.items[0].sets, saved.items[0].repMin, saved.items[0].weightKg], [4, 6, 85]);
+  const again = workoutById(T, repeatWorkout(T, w4id));
+  is('repeat structure', again.items.map((i) => i.sets.length), [4, 3, 1]);
+  ok('repeat not done', again.items.every((i) => i.sets.every((s) => !s.done)));
+  deleteWorkout(T, again.id);
+  const dup = templateById(T, duplicateTemplate(T, tid));
+  ok('duplicate', dup.name === 'Push A (copy)' && dup.items.length === 3 && dup.items[0].id !== t.items[0].id);
+  deleteTemplate(T, dup.id);
+  ok('template deleted', !templateById(T, dup.id));
+
+  // --- backup ---
+  T.settings.unit = 'lb';
+  const b = JSON.parse(JSON.stringify(makeBackup(T)));
+  const R = stateFromBackup(b);
+  is('backup workouts', R.workouts.length, T.workouts.length);
+  is('backup settings', R.settings.unit, 'lb');
+  ok('backup custom exercise', R.exercises.some((e) => e.name === 'Landmine Press'));
+  let threw = '';
+  try { stateFromBackup({ hello: 1 }); } catch (e) { threw = e.message; }
+  ok('reject foreign file', threw.includes('not a Knur Simulator backup'));
+  try { stateFromBackup({ format: 'knur-simulator-backup', schema: 99, data: {} }); } catch (e) { threw = e.message; }
+  ok('reject newer schema', threw.includes('newer version'));
+  is('restored state reseeds', R.exercises.filter((e) => !e.custom).length, nSeed);
+
+  const result = { passed, failed: failures.length, failures };
+  if (!quiet && typeof console !== 'undefined') {
+    console.log(`Knur Simulator self-test: ${passed} passed, ${failures.length} failed`);
+    failures.forEach((f) => console.warn('FAIL ' + f));
+  }
+  return result;
+};
+
+/* ---- 11_init.js ---- */
+/* ==========================================================================
+   11_init — demo data, service worker, boot.
+   ========================================================================== */
+
+/** Eight weeks of sample training (3×/week, Push/Pull/Legs + cardio). KS.demo() or ?demo=1 */
+KS.demo = function demo() {
+  const E = (n) => slugId(n);
+  const mk = (name, items) => {
+    const id = createTemplate(S, name);
+    const t = templateById(S, id);
+    for (const [ex, sets, repMin, repMax, ss] of items) {
+      const e = exById(S, E(ex));
+      const it = { ...makeTemplateItem(e, ss || null), sets, repMin, repMax };
+      if (e.tracking === 'cardio') Object.assign(it, { sets: 1, repMin: null, repMax: null, durationS: repMin * 60 });
+      t.items.push(it);
+    }
+    normalizeItems(t.items);
+    return t;
+  };
+  const push = mk('Push A', [['Bench Press', 4, 6, 8], ['Overhead Press', 3, 8, 10], ['Incline Dumbbell Press', 3, 8, 12], ['Lateral Raise', 3, 12, 15, 'a'], ['Triceps Pushdown', 3, 10, 12, 'a'], ['Treadmill', 1, 15]]);
+  const pull = mk('Pull A', [['Pull-up', 4, 6, 10], ['Barbell Row', 4, 6, 8], ['Lat Pulldown', 3, 10, 12, 'b'], ['Face Pull', 3, 12, 15, 'b'], ['Dumbbell Curl', 3, 10, 12]]);
+  const legs = mk('Legs', [['Squat', 4, 5, 8], ['Romanian Deadlift', 3, 8, 10], ['Leg Press', 3, 10, 12], ['Standing Calf Raise', 4, 12, 15], ['Stationary Bike', 1, 20]]);
+  const base = { 'Bench Press': 70, 'Overhead Press': 40, 'Incline Dumbbell Press': 24, 'Lateral Raise': 8, 'Triceps Pushdown': 25, 'Barbell Row': 60, 'Lat Pulldown': 55, 'Face Pull': 20, 'Dumbbell Curl': 12, Squat: 90, 'Romanian Deadlift': 80, 'Leg Press': 160, 'Standing Calf Raise': 60 };
+  const plan = [push, pull, legs];
+  const day = 86400000;
+  const start = new Date();
+  start.setHours(18, 0, 0, 0);
+  let n = 0;
+  for (let week = 8; week >= 1; week--) {
+    for (const [k, off] of [[0, 0], [1, 2], [2, 4]]) {
+      const t = plan[k];
+      const ts = start.getTime() - week * 7 * day + off * day;
+      const w = { id: newId(), templateId: t.id, name: t.name, startedAt: ts, finishedAt: ts + (55 + (n % 4) * 5) * 60000, notes: null, items: [] };
+      const prog = 8 - week;
+      for (const ti of t.items) {
+        const ex = exById(S, ti.exerciseId);
+        const it = { id: newId(), exerciseId: ex.id, superset: ti.superset, restS: null, notes: null, sets: [] };
+        if (ex.tracking === 'cardio') {
+          const dur = (ti.durationS || 900) + prog * 30;
+          it.sets.push({ ...makeSet({ durationS: dur, distanceM: Math.round((dur / 60) * (ex.name === 'Treadmill' ? 160 : 420) * (1 + prog * 0.01)), calories: Math.round(dur / 6) }), done: true, doneAt: ts });
+        } else if (ex.tracking === 'bodyweight_reps') {
+          for (let s = 0; s < ti.sets; s++) it.sets.push({ ...makeSet({ reps: Math.max(4, 7 + Math.floor(prog / 2) - s) }), done: true, doneAt: ts });
+        } else {
+          const b = base[ex.name] || 20;
+          const inc = b >= 50 ? 2.5 : 1;
+          const wt = b + Math.floor(prog / 2) * inc;
+          for (let s = 0; s < ti.sets; s++) it.sets.push({ ...makeSet({ weightKg: wt, reps: Math.max(ti.repMin, ti.repMax - s - (prog % 2)) }), done: true, doneAt: ts });
+        }
+        w.items.push(it);
+      }
+      S.workouts.push(w);
+      n++;
+    }
+  }
+  Store.flush();
+  if (typeof render === 'function') render();
+  return n;
+};
+
+function registerServiceWorker() {
+  if (!ROOT.KS_SITE || !('serviceWorker' in navigator) || !/^https?:/.test(location.protocol)) return;
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    reloading = true;
+    Store.flush().then(() => {
+      toast('Updated to the latest version');
+      setTimeout(() => location.reload(), 700);
+    });
+  });
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+async function boot() {
+  const { state, fresh } = await Store.load();
+  S = state;
+  if (fresh) await Store.flush();
+  Store.persist();
+  if (/[?&]demo=1\b/.test(location.search) && !S.workouts.length) KS.demo();
+  if (S.restTimer) Rest.ensureTicking();
+  render();
+  registerServiceWorker();
+}
+boot();
+
+</script>
+</body>
+</html>
